@@ -1,0 +1,101 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.env
+
+# Database
+*.db
+*.sqlite3
+*.sql
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# Storage & Scan Results
+storage/jobs/*
+!storage/jobs/.gitkeep
+output/
+results/
+temp/
+tmp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Node / Frontend
+node_modules/
+frontend/dist/
+frontend/build/
+.next/
+.nuxt/
+.cache/
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+
+# Tools Output (Recon Tools)
+subfinder_output.txt
+httpx_output.txt
+katana_output/
+nuclei_results/
+*.nuclei.json
+
+# AI / ML
+models/
+*.pkl
+*.h5
+*.onnx
+
+# Secrets & Keys
+*.pem
+*.key
+*.crt
+*.p12
+credentials.json
+secrets.yaml
+config/local.yaml
+
+# OS
+Thumbs.db
+.Spotlight-V100
+.Trashes
+
+# Testing
+.tox/
+.coverage.*
+coverage.xml
+*.cover
+
+# Backups
+*.bak
+*.backup
+*.old

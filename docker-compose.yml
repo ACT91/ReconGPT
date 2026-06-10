@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: recongpt-postgres
+    environment:
+      POSTGRES_USER: recongpt
+      POSTGRES_PASSWORD: recongpt123
+      POSTGRES_DB: recongpt
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - recongpt
+
+  redis:
+    image: redis:7-alpine
+    container_name: recongpt-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - recongpt
+
+  backend:
+    build: ./backend
+    container_name: recongpt-backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://recongpt:recongpt123@postgres:5432/recongpt
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./storage:/app/storage
+      - ./logs:/app/logs
+    networks:
+      - recongpt
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+  worker:
+    build: ./backend
+    container_name: recongpt-worker
+    environment:
+      DATABASE_URL: postgresql://recongpt:recongpt123@postgres:5432/recongpt
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./storage:/app/storage
+      - ./logs:/app/logs
+    networks:
+      - recongpt
+    command: celery -A app.tasks.celery_app worker --loglevel=info
+
+networks:
+  recongpt:
+    driver: bridge
+
+volumes:
+  postgres_data:
