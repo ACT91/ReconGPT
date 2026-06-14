@@ -1,19 +1,28 @@
 from pathlib import Path
-from typing import Dict, Any
-from app.utils.subprocess_runner import run_command
+from typing import Dict, Any, Optional
+from app.utils.subprocess_runner import run_command_async
 from app.core.config import settings
 
-def run_subfinder(domain: str, output_file: Path) -> Dict[str, Any]:
+
+async def run_subfinder(
+    domain: str,
+    output_file: Path,
+    sources: Optional[list[str]] = None,
+) -> Dict[str, Any]:
     cmd = [
         settings.SUBFINDER_PATH,
         "-d", domain,
         "-o", str(output_file),
-        "-silent"
+        "-silent",
+        "-all",
     ]
     
-    result = run_command(cmd, timeout=600)
+    if sources:
+        cmd.extend(["-s", ",".join(sources)])
     
-    if result["returncode"] != 0:
-        return {"success": False, "error": result["stderr"]}
+    result = await run_command_async(cmd, timeout=600)
     
-    return {"success": True, "output": result["stdout"]}
+    if not result["success"] and result["returncode"] != 0:
+        return {"success": False, "error": result["stderr"][:1000]}
+    
+    return {"success": True, "stdout": result["stdout"]}

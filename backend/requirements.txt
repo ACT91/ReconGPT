@@ -1,18 +1,64 @@
+# Core Framework
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
-sqlalchemy==2.0.25
-psycopg2-binary==2.9.9
 pydantic==2.5.3
 pydantic-settings==2.1.0
+pydantic-extra-types==2.4.0
+
+# Database
+sqlalchemy==2.0.25
+asyncpg==0.29.0
+alembic==1.13.1
+psycopg2-binary==2.9.9
+
+# Task Queue
 celery==5.3.6
 redis==5.0.1
-openai==1.10.0
-python-multipart==0.0.6
+flower==2.0.1
+
+# Authentication & Security
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+slowapi==0.1.9
+
+# AI
+openai==1.10.0
+tiktoken==0.5.2
+
+# HTTP Client
+httpx==0.26.0
+
+# Logging
+structlog==24.1.0
+loguru==0.7.2
+
+# Validation & Parsing
+email-validator==2.1.0.post1
+python-dateutil==2.8.2
+
+# Utilities
+python-slugify==8.0.1
+pyyaml==6.0.1
+
+# Testing
 pytest==7.4.4
 pytest-cov==4.1.0
+pytest-asyncio==0.23.3
+pytest-mock==3.12.0
+httpx==0.26.0
+faker==22.0.0
+
+# Code Quality
 black==24.1.1
 isort==5.13.2
 mypy==1.8.0
 flake8==7.0.0
+ruff==0.1.14
+
+# Monitoring (optional)
+prometheus-client==0.19.0
+
+# Type Stubs
+types-requests==2.31.0.20231111
+types-python-dateutil==2.8.19.14

@@ -1,9 +1,15 @@
 from pathlib import Path
-from typing import Dict, Any
-from app.utils.subprocess_runner import run_command
+from typing import Dict, Any, Optional
+from app.utils.subprocess_runner import run_command_async
 from app.core.config import settings
 
-def run_katana(input_file: Path, output_dir: Path) -> Dict[str, Any]:
+
+async def run_katana(
+    input_file: Path,
+    output_dir: Path,
+    depth: int = 3,
+    rate_limit: Optional[int] = 50,
+) -> Dict[str, Any]:
     output_file = output_dir / "katana_output.txt"
     
     cmd = [
@@ -11,19 +17,24 @@ def run_katana(input_file: Path, output_dir: Path) -> Dict[str, Any]:
         "-list", str(input_file),
         "-o", str(output_file),
         "-silent",
-        "-jc",  # JavaScript crawling
-        "-kf", "all",  # Known files
-        "-depth", "3"
+        "-jc",
+        "-kf", "all",
+        "-depth", str(depth),
+        "-c", "50",
+        "-timeout", "10",
+        "-retry", "2",
     ]
     
-    result = run_command(cmd, timeout=1800)
+    if rate_limit:
+        cmd.extend(["-rl", str(rate_limit)])
     
-    if result["returncode"] != 0:
-        return {"success": False, "error": result["stderr"]}
+    result = await run_command_async(cmd, timeout=3600)
     
-    # Count URLs
     urls_count = 0
     if output_file.exists():
-        urls_count = len(output_file.read_text().strip().split('\n'))
+        urls_count = len(output_file.read_text(encoding="utf-8", errors="ignore").strip().split('\n'))
+    
+    if not result["success"] and result["returncode"] != 0:
+        return {"success": False, "error": result["stderr"][:1000], "urls_count": urls_count}
     
     return {"success": True, "urls_count": urls_count}

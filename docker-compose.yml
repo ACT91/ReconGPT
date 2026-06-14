@@ -1,8 +1,26 @@
 version: '3.8'
 
+x-shared-environment: &shared-environment
+  DATABASE_URL: postgresql://reconny:reconny123@postgres:5432/reconny
+  REDIS_URL: redis://redis:6379/0
+  CELERY_BROKER_URL: redis://redis:6379/1
+  CELERY_RESULT_BACKEND: redis://redis:6379/2
+  SECRET_KEY: ${SECRET_KEY:-super-secret-key-change-in-production}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-your-key-here}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  LOG_FORMAT: ${LOG_FORMAT:-json}
+  ENVIRONMENT: ${ENVIRONMENT:-development}
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:8000}
+  SUBFINDER_PATH: /usr/local/bin/subfinder
+  HTTPX_PATH: /usr/local/bin/httpx
+  KATANA_PATH: /usr/local/bin/katana
+  NUCLEI_PATH: /usr/local/bin/nuclei
+  GAU_PATH: /usr/local/bin/gau
+  STORAGE_PATH: /app/storage/jobs
+
 services:
   postgres:
-    image: postgres:15
+    image: postgres:15-alpine
     container_name: reconny-postgres
     environment:
       POSTGRES_USER: reconny
@@ -14,65 +32,131 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - reconny
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reconny"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     container_name: reconny-redis
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
     networks:
       - reconny
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: reconny-backend
     ports:
       - "8000:8000"
-    environment:
-      DATABASE_URL: postgresql://reconny:reconny123@postgres:5432/reconny
-      REDIS_URL: redis://redis:6379/0
-      CELERY_BROKER_URL: redis://redis:6379/1
-      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    environment: *shared-environment
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
-      - ./storage:/app/storage
-      - ./logs:/app/logs
+      - storage_data:/app/storage
+      - log_data:/app/logs
     networks:
       - reconny
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    restart: unless-stopped
 
   worker:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: reconny-worker
+    environment: *shared-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - storage_data:/app/storage
+      - log_data:/app/logs
+    networks:
+      - reconny
+    command: >
+      celery -A app.tasks.celery_app worker
+      --loglevel=info
+      --concurrency=4
+      --queues=pipeline,stages,ai
+      --max-tasks-per-child=100
+      --prefetch-multiplier=1
+      --without-gossip
+      --without-mingle
+    restart: unless-stopped
+
+  worker-low:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: reconny-worker-low
+    environment: *shared-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - storage_data:/app/storage
+      - log_data:/app/logs
+    networks:
+      - reconny
+    command: >
+      celery -A app.tasks.celery_app worker
+      --loglevel=info
+      --concurrency=2
+      --queues=default
+      --max-tasks-per-child=50
+      --prefetch-multiplier=1
+    restart: unless-stopped
+
+  flower:
+    image: mher/flower:2.0
+    container_name: reconny-flower
     environment:
-      DATABASE_URL: postgresql://reconny:reconny123@postgres:5432/reconny
-      REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
-    depends_on:
-      - postgres
-      - redis
-    volumes:
-      - ./storage:/app/storage
-      - ./logs:/app/logs
-    networks:
-      - reconny
-    command: celery -A app.tasks.celery_app worker --loglevel=info
-
-  frontend:
-    build: ./frontend
-    container_name: reconny-frontend
+      FLOWER_PORT: 5555
     ports:
-      - "3000:3000"
-    environment:
-      - VITE_API_URL=http://localhost:8000
+      - "5555:5555"
     depends_on:
-      - backend
+      redis:
+        condition: service_healthy
     networks:
       - reconny
-    command: npm run dev -- --host
+    restart: unless-stopped
+
+  migration:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: reconny-migration
+    environment: *shared-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend/alembic:/app/alembic
+    networks:
+      - reconny
+    command: >
+      sh -c "alembic upgrade head && echo 'Migrations completed'"
+    restart: no
 
 networks:
   reconny:
@@ -80,3 +164,6 @@ networks:
 
 volumes:
   postgres_data:
+  redis_data:
+  storage_data:
+  log_data:
