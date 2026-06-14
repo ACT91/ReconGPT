@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { insightApi, resultApi } from '@/services/api'
-import { SeverityBadge } from '@/components/common'
+import { SeverityBadge, Skeleton, ErrorBoundary } from '@/components/common'
 import type { AggregatedStats } from '@/types'
 
 function RiskScoreGauge({ score }: { score: number }) {
@@ -155,19 +155,39 @@ export function AIAnalysisPage() {
           <p className="text-lg">Enter a scan job ID to view AI analysis</p>
         </div>
       ) : (
-        <div className="space-y-6">
+        <ErrorBoundary><div className="space-y-6">
           {/* Risk Score + Stats Row */}
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
             <div className="bg-gray-900 rounded-xl border border-gray-800 p-6 flex items-center justify-center">
-              <RiskScoreGauge score={(riskScore as any)?.overall_score || 0} />
+              {riskScore ? (
+                <RiskScoreGauge score={(riskScore as any)?.overall_score || 0} />
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <Skeleton variant="circular" width={128} height={128} />
+                  <Skeleton variant="text" width={80} height={16} />
+                </div>
+              )}
             </div>
-            <div className="lg:col-span-3 grid grid-cols-3 gap-4">
-              <StatCard label="Subdomains" value={stats?.total_subdomains || 0} color="text-blue-400" />
-              <StatCard label="Live Hosts" value={stats?.live_subdomains || 0} color="text-green-400" />
-              <StatCard label="Endpoints" value={stats?.total_endpoints || 0} color="text-purple-400" />
-              <StatCard label="Vulnerabilities" value={stats?.total_vulnerabilities || 0} color="text-red-400" />
-              <StatCard label="Critical" value={stats?.vulnerabilities_by_severity?.critical || 0} color="text-red-500" />
-              <StatCard label="High" value={stats?.vulnerabilities_by_severity?.high || 0} color="text-orange-400" />
+            <div className="lg:col-span-3 grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {stats ? (
+                <>
+                  <StatCard label="Subdomains" value={stats?.total_subdomains || 0} color="text-blue-400" />
+                  <StatCard label="Live Hosts" value={stats?.live_subdomains || 0} color="text-green-400" />
+                  <StatCard label="Endpoints" value={stats?.total_endpoints || 0} color="text-purple-400" />
+                  <StatCard label="Vulnerabilities" value={stats?.total_vulnerabilities || 0} color="text-red-400" />
+                  <StatCard label="Critical" value={stats?.vulnerabilities_by_severity?.critical || 0} color="text-red-500" />
+                  <StatCard label="High" value={stats?.vulnerabilities_by_severity?.high || 0} color="text-orange-400" />
+                </>
+              ) : (
+                <>
+                  {['Subdomains', 'Live Hosts', 'Endpoints', 'Vulnerabilities', 'Critical', 'High'].map((label) => (
+                    <div key={label} className="bg-gray-800/50 rounded-lg p-4">
+                      <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">{label}</p>
+                      <Skeleton variant="text" width={60} height={28} />
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
           </div>
 
@@ -181,7 +201,12 @@ export function AIAnalysisPage() {
 
           {/* Executive Summary */}
           {summaryLoading ? (
-            <div className="text-center py-8 text-gray-400">Loading summary...</div>
+            <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
+              <h2 className="text-lg font-semibold text-white mb-4">Executive Summary</h2>
+              <div className="space-y-3">
+                <Skeleton variant="text" count={4} />
+              </div>
+            </div>
           ) : summary ? (
             <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
               <h2 className="text-lg font-semibold text-white mb-4">Executive Summary</h2>
@@ -242,6 +267,7 @@ export function AIAnalysisPage() {
             </div>
           )}
         </div>
+        </ErrorBoundary>
       )}
     </div>
   )

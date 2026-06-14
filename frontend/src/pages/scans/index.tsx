@@ -12,7 +12,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { scanApi, getApiError } from '@/services/api'
 import { useScanWebSocket } from '@/hooks/useScanWebSocket'
-import { ScanProgressBar, StatusBadge, LiveLogsViewer } from '@/components/common'
+import { ScanProgressBar, StatusBadge, LiveLogsViewer, SkeletonTable, ErrorBoundary } from '@/components/common'
 import type { ScanJob, ScanProgress, ScanLogEntry } from '@/types'
 
 const columnHelper = createColumnHelper<ScanJob>()
@@ -325,6 +325,12 @@ export function ScansPage() {
         />
       </div>
 
+      <ErrorBoundary>
+      {isLoading ? (
+        <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
+          <SkeletonTable rows={6} cols={6} />
+        </div>
+      ) : (
       <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -345,13 +351,7 @@ export function ScansPage() {
               ))}
             </thead>
             <tbody>
-              {isLoading ? (
-                <tr>
-                  <td colSpan={columns.length} className="text-center py-12 text-gray-400">
-                    Loading scans...
-                  </td>
-                </tr>
-              ) : table.getRowModel().rows.length === 0 ? (
+              {table.getRowModel().rows.length === 0 ? (
                 <tr>
                   <td colSpan={columns.length} className="text-center py-12 text-gray-400">
                     No scans yet. Start your first scan!
@@ -398,6 +398,8 @@ export function ScansPage() {
           </div>
         </div>
       </div>
+      )}
+      </ErrorBoundary>
 
       <NewScanModal open={showNewScan} onClose={() => setShowNewScan(false)} />
       {selectedJob && <ScanDetailPanel job={selectedJob} onClose={() => setSelectedJob(null)} />}

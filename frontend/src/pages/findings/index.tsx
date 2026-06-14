@@ -11,7 +11,7 @@ import {
 } from '@tanstack/react-table'
 import { useQuery } from '@tanstack/react-query'
 import { scanApi } from '@/services/api'
-import { SeverityBadge } from '@/components/common'
+import { SeverityBadge, SkeletonTable, ErrorBoundary } from '@/components/common'
 import type { Vulnerability } from '@/types'
 
 const columnHelper = createColumnHelper<Vulnerability>()
@@ -199,9 +199,11 @@ export function FindingsPage() {
           )}
 
           {isLoading ? (
-            <div className="text-center py-20 text-gray-400">Loading findings...</div>
-          ) : (
             <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
+              <SkeletonTable rows={6} cols={6} />
+            </div>
+          ) : (
+            <ErrorBoundary><div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
@@ -245,6 +247,7 @@ export function FindingsPage() {
                 </div>
               </div>
             </div>
+            </ErrorBoundary>
           )}
 
           {selectedVuln && (

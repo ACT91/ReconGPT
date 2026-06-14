@@ -12,7 +12,7 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import { scanApi } from '@/services/api'
-import { TechnologyBadges } from '@/components/common'
+import { TechnologyBadges, SkeletonTable, ErrorBoundary } from '@/components/common'
 import type { Subdomain } from '@/types'
 
 const columnHelper = createColumnHelper<Subdomain>()
@@ -170,9 +170,11 @@ export function AssetsPage() {
           <p className="text-lg">Enter a scan job ID to view its assets</p>
         </div>
       ) : isLoading ? (
-        <div className="text-center py-20 text-gray-400">Loading assets...</div>
-      ) : (
         <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
+          <SkeletonTable rows={8} cols={7} />
+        </div>
+      ) : (
+        <ErrorBoundary><div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -216,6 +218,7 @@ export function AssetsPage() {
             </div>
           </div>
         </div>
+        </ErrorBoundary>
       )}
     </div>
   )

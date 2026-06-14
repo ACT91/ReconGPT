@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { MainLayout } from '../layouts/MainLayout'
 import { useCurrentUser } from '@/hooks/useAuth'
+import { ErrorBoundary } from '@/components/common'
 import { Dashboard } from '@/pages/dashboard'
 import {
   ProjectsPage,
@@ -30,7 +31,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />
   }
 
-  return <>{children}</>
+  return (
+    <ErrorBoundary>
+      {children}
+    </ErrorBoundary>
+  )
 }
 
 export function AppRouter() {
