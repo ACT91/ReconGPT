@@ -1,69 +1,187 @@
-import axios from 'axios'
-import type { Job, Project, ScanResults } from '@/types'
+import axios, { AxiosError } from 'axios'
+import type {
+  AuthTokens,
+  LoginRequest,
+  RegisterRequest,
+  User,
+  Project,
+  ProjectCreate,
+  ScanJob,
+  ScanRequest,
+  ScanResponse,
+  PaginatedResponse,
+  PaginationParams,
+  Subdomain,
+  Vulnerability,
+  APIKey,
+  APIKeyCreate,
+  APIKeyFull,
+  AggregatedStats,
+  ProjectStats,
+  ScanProgress,
+  ScanLogsResponse,
+  AiInsight,
+  ApiError,
+} from '@/types'
 
 const api = axios.create({
   baseURL: '/api/v1',
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' },
 })
 
-// Scan APIs
-export const scanApi = {
-  startScan: async (data: { target_domain: string; user_id: string; project_id?: string }) => {
-    const response = await api.post<{ job_id: string; status: string; message: string }>('/scan/start', data)
-    return response.data
-  },
-
-  getScanStatus: async (jobId: string) => {
-    const response = await api.get<Job>(`/scan/${jobId}`)
-    return response.data
-  },
-
-  getScanLogs: async (jobId: string) => {
-    const response = await api.get<{ job_id: string; logs: string }>(`/scan/${jobId}/logs`)
-    return response.data
-  },
-
-  getScanResults: async (jobId: string) => {
-    const response = await api.get<ScanResults>(`/results/${jobId}`)
-    return response.data
-  },
-}
-
-// Project APIs
-export const projectApi = {
-  createProject: async (data: { user_id: string; name: string; description?: string }) => {
-    const response = await api.post<Project>('/projects', data)
-    return response.data
-  },
-
-  listProjects: async (userId: string) => {
-    const response = await api.get<Project[]>('/projects', { params: { user_id: userId } })
-    return response.data
-  },
-}
-
-// Add request interceptor for auth token
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('auth_token')
+  const token = localStorage.getItem('access_token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
+  }
+  const apiKey = localStorage.getItem('api_key')
+  if (apiKey) {
+    config.headers['X-API-Key'] = apiKey
   }
   return config
 })
 
-// Add response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Handle unauthorized
-      localStorage.removeItem('auth_token')
-      window.location.href = '/login'
+  async (error: AxiosError<ApiError>) => {
+    if (error.response?.status === 401 && !error.config?.url?.includes('/auth/')) {
+      const refreshToken = localStorage.getItem('refresh_token')
+      if (refreshToken) {
+        try {
+          const { data } = await axios.post<AuthTokens>('/api/v1/auth/refresh', {
+            refresh_token: refreshToken,
+          })
+          localStorage.setItem('access_token', data.access_token)
+          localStorage.setItem('refresh_token', data.refresh_token)
+          if (error.config) {
+            error.config.headers.Authorization = `Bearer ${data.access_token}`
+            return api(error.config)
+          }
+        } catch {
+          localStorage.clear()
+          window.location.href = '/login'
+        }
+      } else {
+        localStorage.clear()
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(error)
   }
 )
+
+export function getApiError(error: unknown): string {
+  if (error instanceof AxiosError && error.response?.data) {
+    const data = error.response.data as ApiError
+    return data.detail || data.error || error.message
+  }
+  if (error instanceof Error) return error.message
+  return 'An unexpected error occurred'
+}
+
+export const authApi = {
+  login: (data: LoginRequest) =>
+    api.post<AuthTokens>('/auth/login', data).then((r) => r.data),
+
+  register: (data: RegisterRequest) =>
+    api.post<User>('/auth/register', data).then((r) => r.data),
+
+  refresh: (refresh_token: string) =>
+    api.post<AuthTokens>('/auth/refresh', { refresh_token }).then((r) => r.data),
+
+  me: () => api.get<User>('/auth/me').then((r) => r.data),
+
+  changePassword: (current_password: string, new_password: string) =>
+    api.post('/auth/change-password', { current_password, new_password }).then((r) => r.data),
+
+  listApiKeys: () =>
+    api.get<APIKey[]>('/auth/api-keys').then((r) => r.data),
+
+  createApiKey: (data: APIKeyCreate) =>
+    api.post<APIKeyFull>('/auth/api-keys', data).then((r) => r.data),
+
+  revokeApiKey: (keyId: string) =>
+    api.delete(`/auth/api-keys/${keyId}`).then((r) => r.data),
+}
+
+export const projectApi = {
+  create: (data: ProjectCreate) =>
+    api.post<Project>('/projects', data).then((r) => r.data),
+
+  list: (params?: PaginationParams) =>
+    api.get<PaginatedResponse<Project>>('/projects', { params }).then((r) => r.data),
+
+  get: (id: string) =>
+    api.get<Project>(`/projects/${id}`).then((r) => r.data),
+
+  getStats: (id: string) =>
+    api.get<ProjectStats>(`/projects/${id}/stats`).then((r) => r.data),
+
+  update: (id: string, data: Partial<ProjectCreate>) =>
+    api.patch<Project>(`/projects/${id}`, data).then((r) => r.data),
+
+  delete: (id: string) =>
+    api.delete(`/projects/${id}`).then((r) => r.data),
+}
+
+export const scanApi = {
+  start: (data: ScanRequest) =>
+    api.post<ScanResponse>('/scans/start', data).then((r) => r.data),
+
+  list: (params?: PaginationParams & { project_id?: string; status?: string }) =>
+    api.get<PaginatedResponse<ScanJob>>('/scans', { params }).then((r) => r.data),
+
+  get: (id: string) =>
+    api.get<ScanJob>(`/scans/${id}`).then((r) => r.data),
+
+  getProgress: (id: string) =>
+    api.get<ScanProgress>(`/scans/${id}/progress`).then((r) => r.data),
+
+  getLogs: (id: string, params?: { stage?: string; level?: string; page?: number; page_size?: number }) =>
+    api.get<ScanLogsResponse>(`/scans/${id}/logs`, { params }).then((r) => r.data),
+
+  getSubdomains: (id: string, params?: PaginationParams) =>
+    api.get<PaginatedResponse<Subdomain>>(`/scans/${id}/subdomains`, { params }).then((r) => r.data),
+
+  getVulnerabilities: (id: string, params?: PaginationParams & { severity?: string }) =>
+    api.get<PaginatedResponse<Vulnerability>>(`/scans/${id}/vulnerabilities`, { params }).then((r) => r.data),
+
+  cancel: (id: string, force?: boolean) =>
+    api.post(`/scans/${id}/cancel`, { force }).then((r) => r.data),
+
+  retry: (id: string) =>
+    api.post<ScanResponse>(`/scans/${id}/retry`).then((r) => r.data),
+}
+
+export const resultApi = {
+  getOverview: (id: string) =>
+    api.get(`/results/${id}/overview`).then((r) => r.data),
+
+  getFull: (id: string) =>
+    api.get(`/results/${id}`).then((r) => r.data),
+
+  getStats: (id: string) =>
+    api.get<AggregatedStats>(`/results/${id}/stats`).then((r) => r.data),
+
+  getGraph: (id: string) =>
+    api.get(`/results/${id}/graph`).then((r) => r.data),
+}
+
+export const insightApi = {
+  list: (id: string, params?: { type?: string; priority?: string; actionable_only?: boolean; page?: number; page_size?: number }) =>
+    api.get<PaginatedResponse<AiInsight>>(`/insights/${id}`, { params }).then((r) => r.data),
+
+  executiveSummary: (id: string) =>
+    api.get<AiInsight>(`/insights/${id}/executive-summary`).then((r) => r.data),
+
+  riskScore: (id: string) =>
+    api.get(`/insights/${id}/risk-score`).then((r) => r.data),
+
+  attackVectors: (id: string) =>
+    api.get(`/insights/${id}/attack-vectors`).then((r) => r.data),
+
+  update: (jobId: string, insightId: string, data: Record<string, unknown>) =>
+    api.patch<AiInsight>(`/insights/${jobId}/${insightId}`, data).then((r) => r.data),
+}
 
 export default api

@@ -16,7 +16,7 @@ class AiInsightBase(BaseModel):
     related_vulnerabilities: List[Dict[str, Any]] = []
     related_subdomains: List[Dict[str, Any]] = []
     related_endpoints: List[Dict[str, Any]] = []
-    metadata: Dict[str, Any] = {}
+    insight_metadata: Dict[str, Any] = {}
     model_used: Optional[str] = None
     tokens_used: Optional[int] = None
     confidence: Optional[float] = None

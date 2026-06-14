@@ -1,4 +1,4 @@
-import { Users, Activity, Shield, TrendingUp } from 'lucide-react'
+import { Activity, Shield, TrendingUp } from 'lucide-react'
 import { AttackSurfaceGraph } from '@/graphs/AttackSurfaceGraph'
 
 const mockScanData = {

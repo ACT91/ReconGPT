@@ -10,7 +10,7 @@ x-shared-environment: &shared-environment
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   LOG_FORMAT: ${LOG_FORMAT:-json}
   ENVIRONMENT: ${ENVIRONMENT:-development}
-  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:8000}
+  CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000","http://localhost:8000"]}
   SUBFINDER_PATH: /usr/local/bin/subfinder
   HTTPX_PATH: /usr/local/bin/httpx
   KATANA_PATH: /usr/local/bin/katana

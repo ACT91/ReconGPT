@@ -1,14 +1,13 @@
-import { useCallback, useMemo } from 'react'
+import { useMemo } from 'react'
 import ReactFlow, {
   Node,
   Edge,
   Background,
   Controls,
   MiniMap,
+  MarkerType,
   useNodesState,
   useEdgesState,
-  MarkerType,
-  Position,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { Shield, Globe, Link as LinkIcon, Code, AlertTriangle } from 'lucide-react'
@@ -207,8 +206,8 @@ export function AttackSurfaceGraph({ data }: AttackSurfaceGraphProps) {
     return edges
   }, [data])
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+  const [nodes, _setNodes, onNodesChange] = useNodesState(initialNodes)
+  const [edges, _setEdges, onEdgesChange] = useEdgesState(initialEdges)
 
   if (!data) {
     return (

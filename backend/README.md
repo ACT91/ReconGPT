@@ -74,54 +74,125 @@ Once running, visit:
 
 ### API Endpoints
 
+All endpoints are prefixed with `/api/v1`.
+
 #### Authentication (`/api/v1/auth`)
-- `POST /login` - Login with email/password
+- `POST /login` - Login with email/password → returns `access_token`, `refresh_token`
 - `POST /register` - Register new user
-- `POST /refresh` - Refresh access token
-- `GET /me` - Get current user
+- `POST /refresh` - Refresh access token using refresh token
+- `GET /me` - Get current authenticated user
 - `POST /change-password` - Change password
-- `POST /api-keys` - Create API key
-- `GET /api-keys` - List API keys
+- `POST /api-keys` - Create API key (returns full key once)
+- `GET /api-keys` - List API keys (truncated prefixes)
 - `DELETE /api-keys/{id}` - Revoke API key
+- `POST /logout` - Logout (client-side token removal)
 
 #### Projects (`/api/v1/projects`)
 - `POST /projects` - Create project
-- `GET /projects` - List projects
+- `GET /projects` - List projects (paginated)
 - `GET /projects/{id}` - Get project
 - `GET /projects/{id}/stats` - Get project statistics
 - `PATCH /projects/{id}` - Update project
 - `DELETE /projects/{id}` - Delete project
 
 #### Scans (`/api/v1/scans`)
-- `POST /scans/start` - Start new scan
-- `GET /scans` - List scans
+- `POST /scans/start` - Start new scan (rate-limited)
+- `GET /scans` - List scans (paginated, sortable: `?sort=created_at:desc&search=domain&page=1&page_size=20`)
 - `GET /scans/{id}` - Get scan status
-- `GET /scans/{id}/progress` - Get detailed progress
-- `GET /scans/{id}/logs` - Get scan logs
-- `GET /scans/{id}/logs/stream` - Stream logs (SSE)
+- `GET /scans/{id}/progress` - Get detailed progress (per-stage)
+- `GET /scans/{id}/logs` - Get scan logs (paginated, filterable by stage/level)
+- `GET /scans/{id}/logs/stream` - Stream logs via SSE (Server-Sent Events)
+- **`WS /scans/{id}/ws`** - WebSocket endpoint for real-time progress, logs, and status updates
 - `GET /scans/{id}/results` - Get full results
-- `GET /scans/{id}/subdomains` - Get subdomains
-- `GET /scans/{id}/vulnerabilities` - Get vulnerabilities
-- `POST /scans/{id}/cancel` - Cancel scan
-- `POST /scans/{id}/retry` - Retry scan
+- `GET /scans/{id}/subdomains` - Get subdomains (paginated)
+- `GET /scans/{id}/vulnerabilities` - Get vulnerabilities (paginated, filterable by severity)
+- `POST /scans/{id}/cancel` - Cancel scan (revokes Celery task)
+- `POST /scans/{id}/retry` - Retry failed scan
 
 #### Results (`/api/v1/results`)
 - `GET /results/{id}/overview` - Results overview
-- `GET /results/{id}` - Full scan results
+- `GET /results/{id}` - Full scan results (all categories)
 - `GET /results/{id}/stats` - Aggregated statistics
-- `GET /results/{id}/graph` - Attack surface graph data
+- `GET /results/{id}/graph` - Attack surface graph data (for ReactFlow visualization)
 
 #### Insights (`/api/v1/insights`)
-- `GET /insights/{job_id}` - List AI insights
+- `GET /insights/{job_id}` - List AI insights (paginated, filterable by type/priority)
 - `GET /insights/{job_id}/executive-summary` - Executive summary
 - `GET /insights/{job_id}/risk-score` - Risk score breakdown
 - `GET /insights/{job_id}/attack-vectors` - Attack vectors
 - `GET /insights/{job_id}/{insight_id}` - Insight detail
-- `PATCH /insights/{job_id}/{insight_id}` - Update insight
+- `PATCH /insights/{job_id}/{insight_id}` - Update insight (dismiss, etc.)
 
-## Pipeline Stages
+### Authentication Flow
 
-The reconnaissance pipeline consists of 13 sequential stages:
+Reconny supports two authentication methods:
+
+1. **JWT Tokens** (primary):
+   - Login → receive `access_token` (30min) + `refresh_token` (7 days)
+   - Pass `Authorization: Bearer <token>` header
+   - Use `/auth/refresh` to get new tokens before expiration
+   - Tokens contain `sub` (user ID), `email`, `role`
+
+2. **API Keys** (for programmatic access):
+   - Create via `/auth/api-keys` → receives full key once (prefix: `rky_`)
+   - Pass `X-API-Key: <key>` header
+   - Keys can be revoked, have optional expiration
+
+### Rate Limiting
+
+- **Global**: 100 requests per 60 seconds per user
+- **Scan rate limit**: 10 scan starts per hour per user
+- **Concurrent scans**: Maximum 3 concurrent scans per user
+- All rate limits return `429 Too Many Requests` with `Retry-After` header
+
+### WebSocket Usage
+
+Connect to `/api/v1/scans/{job_id}/ws` with authentication to receive real-time updates:
+
+```json
+// Progress update
+{
+  "job_id": "<uuid>",
+  "type": "progress",
+  "stage": "subdomain_enum",
+  "progress": 45.0,
+  "message": "Processing batch 3/8",
+  "timestamp": 1234567890.123
+}
+
+// Log entry
+{
+  "job_id": "<uuid>",
+  "type": "log",
+  "stage": "subdomain_enum",
+  "level": "info",
+  "message": "Found 150 subdomains via Subfinder",
+  "details": {"source": "subfinder"},
+  "timestamp": 1234567890.123
+}
+
+// Status change
+{
+  "job_id": "<uuid>",
+  "type": "status",
+  "status": "running",
+  "error": null,
+  "timestamp": 1234567890.123
+}
+```
+
+### Error Handling
+
+All errors return a consistent JSON format:
+```json
+{
+  "error": "Human-readable error title",
+  "detail": "Detailed error description",
+  "code": "ERROR_CODE"
+}
+```
+
+Common error codes: `VALIDATION_ERROR`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `RATE_LIMIT_EXCEEDED`, `TOOL_EXECUTION_ERROR`, `PIPELINE_ERROR`, `DOMAIN_NOT_ALLOWED`
 
 | # | Stage | Tool | Description |
 |---|-------|------|-------------|
