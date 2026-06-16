@@ -1,6 +1,6 @@
 from typing import Optional, AsyncGenerator
 from uuid import UUID
-from fastapi import Depends, HTTPException, status, Header, Request
+from fastapi import Depends, HTTPException, status, Header, Request, WebSocket, Query
 from fastapi.security import OAuth2PasswordBearer, APIKeyHeader
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
@@ -148,3 +148,31 @@ async def check_scan_concurrency(
             detail=f"Maximum concurrent scans exceeded. Max {settings.MAX_CONCURRENT_SCANS_PER_USER} concurrent scans per user"
         )
     return remaining
+
+
+async def get_current_user_ws(
+    ws: WebSocket,
+    token: Optional[str] = Query(None, alias="token"),
+    db: AsyncSession = Depends(get_db),
+) -> Optional[User]:
+    if not token:
+        await ws.close(code=1008, reason="Missing auth token")
+        return None
+
+    payload = verify_token(token, "access")
+    if not payload:
+        await ws.close(code=1008, reason="Invalid or expired token")
+        return None
+
+    user_id = payload.get("sub")
+    if not user_id:
+        await ws.close(code=1008, reason="Invalid token payload")
+        return None
+
+    auth_service = AuthService(db)
+    user = await auth_service.get_user_by_id(UUID(user_id))
+    if not user or not user.is_active:
+        await ws.close(code=1008, reason="User not found or inactive")
+        return None
+
+    return user

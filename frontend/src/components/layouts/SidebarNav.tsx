@@ -16,6 +16,7 @@ import {
   LogOut,
 } from 'lucide-react'
 import { SidebarSection } from './SidebarSection'
+import { useLogout } from '@/hooks/useAuth'
 
 type SidebarNavProps = {
   isCollapsed: boolean
@@ -90,6 +91,8 @@ function SidebarNavContent({ isCollapsed }: SidebarNavProps) {
       icon: Settings,
     },
   ]
+
+  const logout = useLogout()
 
   const toggleExpand = (href: string) => {
     setExpandedItem(expandedItem === href ? null : href)
@@ -201,13 +204,13 @@ function SidebarNavContent({ isCollapsed }: SidebarNavProps) {
             <HelpCircle className="h-[18px] w-[18px] text-zinc-500" />
             <span className="font-medium">Help & Information</span>
           </Link>
-          <a
-            href="#"
-            className="flex items-center gap-3 px-3 py-2.5 text-zinc-400 hover:text-zinc-200 hover:bg-sidebar-hover rounded-xl transition-colors text-[13px]"
+          <button
+            onClick={logout}
+            className="flex items-center gap-3 w-full px-3 py-2.5 text-zinc-400 hover:text-zinc-200 hover:bg-sidebar-hover rounded-xl transition-colors text-[13px]"
           >
             <LogOut className="h-[18px] w-[18px] text-zinc-500" />
             <span className="font-medium">Log out</span>
-          </a>
+          </button>
         </div>
       )}
       {isCollapsed && (
@@ -219,13 +222,13 @@ function SidebarNavContent({ isCollapsed }: SidebarNavProps) {
           >
             <HelpCircle className="h-[18px] w-[18px]" />
           </Link>
-          <a
-            href="#"
+          <button
+            onClick={logout}
             className="p-2.5 text-zinc-500 hover:text-zinc-200 hover:bg-sidebar-hover rounded-xl transition-colors"
             aria-label="Log out"
           >
             <LogOut className="h-[18px] w-[18px]" />
-          </a>
+          </button>
         </div>
       )}
     </div>

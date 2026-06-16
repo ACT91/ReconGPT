@@ -30,7 +30,7 @@ from app.schemas.scan import (
     ScanStageProgress,
 )
 from app.schemas.common import PaginationParams
-from app.api.deps import get_current_user, get_current_active_user, rate_limit_scan, rate_limit, check_scan_concurrency
+from app.api.deps import get_current_user, get_current_active_user, get_current_user_ws, rate_limit_scan, rate_limit, check_scan_concurrency
 from app.tasks.scan_tasks import execute_full_pipeline
 from app.services.scan import ScanService
 from app.core.logger import get_logger
@@ -205,14 +205,17 @@ async def stream_scan_logs(
 async def scan_websocket(
     ws: WebSocket,
     job_id: UUID,
-    current_user: User = Depends(get_current_active_user),
+    current_user: Optional[User] = Depends(get_current_user_ws),
     db: AsyncSession = Depends(get_db),
 ):
+    if not current_user:
+        return
+
     scan_service = ScanService(db)
     job = await scan_service.get_scan_job(job_id, current_user.id)
 
     if not job:
-        await ws.close(code=1008)
+        await ws.close(code=1008, reason="Scan job not found")
         return
 
     await manager.connect_job(ws, job_id)

@@ -150,15 +150,22 @@ def execute_full_pipeline(self, job_id: str):
         stage_count = len(stages)
         
         run_async(_initialize_job(job_id))
+        run_async(_emit_pipeline_event(job_id, "pipeline_started", {"stages": stage_count}))
         
         for idx, stage in enumerate(stages):
             is_last = (idx == stage_count - 1)
+            
+            stage_progress = (idx / stage_count) * 100
+            run_async(_emit_pipeline_event(
+                job_id, "stage_started",
+                {"stage": stage.value, "stage_index": idx, "total_stages": stage_count},
+            ))
             
             logger.info(
                 "pipeline_stage_starting",
                 job_id=job_id,
                 stage=stage.value,
-                progress=f"{(idx / stage_count) * 100:.1f}%",
+                progress=f"{stage_progress:.1f}%",
             )
             
             result = execute_scan_stage(job_id, stage.value)
@@ -166,19 +173,27 @@ def execute_full_pipeline(self, job_id: str):
             is_cancelled = run_async(_check_job_cancelled(job_id))
             if is_cancelled:
                 logger.info("pipeline_cancelled", job_id=job_id)
+                run_async(_emit_pipeline_event(job_id, "pipeline_cancelled", {}))
                 return {"success": False, "error": "Cancelled"}
             
             if not result.get("success"):
                 if is_last:
                     run_async(_finalize_job(job_id, ScanStatus.PARTIAL))
+                    run_async(_emit_pipeline_event(job_id, "pipeline_partial", {"failed_stage": stage.value}))
                     logger.warning("pipeline_partial_complete", job_id=job_id, failed_stage=stage.value)
                     return {"success": True, "partial": True, "failed_stage": stage.value}
                 else:
                     logger.error("pipeline_failed", job_id=job_id, failed_stage=stage.value)
+                    run_async(_emit_pipeline_event(job_id, "pipeline_failed", {"failed_stage": stage.value}))
                     return result
             
             progress = ((idx + 1) / stage_count) * 100
             run_async(_update_job_progress(job_id, stage, progress))
+            
+            run_async(_emit_pipeline_event(
+                job_id, "stage_completed",
+                {"stage": stage.value, "stage_index": idx, "progress": progress},
+            ))
             
             logger.info(
                 "pipeline_stage_completed",
@@ -189,6 +204,7 @@ def execute_full_pipeline(self, job_id: str):
         
         run_async(_finalize_job(job_id, ScanStatus.COMPLETED))
         run_async(_save_results_to_db(job_id))
+        run_async(_emit_pipeline_event(job_id, "pipeline_completed", {}))
         
         logger.info("pipeline_completed", job_id=job_id)
         return {"success": True}
@@ -196,6 +212,7 @@ def execute_full_pipeline(self, job_id: str):
     except Exception as e:
         logger.error("pipeline_failed", job_id=job_id, error=str(e))
         run_async(_finalize_job(job_id, ScanStatus.FAILED, str(e)))
+        run_async(_emit_pipeline_event(job_id, "pipeline_failed", {"error": str(e)}))
         return {"success": False, "error": str(e)}
 
 
@@ -231,6 +248,17 @@ async def _update_job_progress(job_id: str, stage: PipelineStage, progress: floa
             job.current_stage = stage
             job.progress_percent = progress
             await session.commit()
+
+
+async def _emit_pipeline_event(job_id: str, event_type: str, data: dict):
+    try:
+        await broadcast_pipeline_event(
+            job_id=UUID(job_id),
+            event_type=event_type,
+            data=data,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to emit pipeline event: {e}")
 
 
 async def _finalize_job(job_id: str, status: ScanStatus, error: str = None):

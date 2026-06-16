@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.core.database import async_session_factory
 from app.models.job import ScanJob, PipelineStage, ScanStatus
 from app.models.pipeline_log import PipelineLog, LogLevel
+from app.core.websocket_manager import emit_stage_progress, emit_stage_log
 
 
 logger = structlog.get_logger(__name__)
@@ -69,6 +70,17 @@ class PipelineStageBase(ABC):
         except Exception as e:
             logger.warning(f"Failed to save pipeline log: {e}")
 
+        try:
+            await emit_stage_log(
+                job_id=UUID(self.job_id),
+                stage=self.stage_name.value if self.stage_name else "unknown",
+                level=level.value,
+                message=message,
+                details=details,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to emit WebSocket log: {e}")
+
     async def update_job_status(self, status: ScanStatus, stage: Optional[PipelineStage] = None, error: Optional[str] = None) -> None:
         try:
             async with async_session_factory() as session:
@@ -92,6 +104,17 @@ class PipelineStageBase(ABC):
                     await session.commit()
         except Exception as e:
             logger.warning(f"Failed to update job status: {e}")
+
+        try:
+            stage_name = stage.value if stage else (self.stage_name.value if self.stage_name else None)
+            await emit_stage_progress(
+                job_id=UUID(self.job_id),
+                stage=stage_name or "unknown",
+                progress=job.progress_percent if job else 0,
+                message=f"Status: {status.value}",
+            )
+        except Exception as e:
+            logger.warning(f"Failed to emit WebSocket progress: {e}")
 
     async def mark_started(self) -> None:
         await self.update_job_status(ScanStatus.RUNNING, self.stage_name)
