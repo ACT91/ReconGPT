@@ -1,4 +1,7 @@
-import { Activity, Shield, TrendingUp } from 'lucide-react'
+import { Shield, Globe, AlertTriangle, ArrowRight, ScanLine } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
 import { AttackSurfaceGraph } from '@/graphs/AttackSurfaceGraph'
 
 const mockScanData = {
@@ -17,165 +20,170 @@ const mockScanData = {
   ],
 }
 
+function StatCard({ icon: Icon, label, value, trend }: { icon: React.ElementType; label: string; value: string; trend?: string }) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
+        <div className="h-8 w-8 rounded-lg bg-primary/5 flex items-center justify-center">
+          <Icon className="h-4 w-4 text-primary" />
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="text-3xl font-bold">{value}</div>
+        {trend && (
+          <p className="text-xs text-muted-foreground mt-1">{trend}</p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function SeverityBadge({ severity }: { severity: string }) {
+  const map: Record<string, { variant: 'destructive' | 'warning' | 'info' | 'secondary'; label: string }> = {
+    critical: { variant: 'destructive', label: 'Critical' },
+    high: { variant: 'warning', label: 'High' },
+    medium: { variant: 'info', label: 'Medium' },
+    low: { variant: 'secondary', label: 'Low' },
+  }
+  const { variant, label } = map[severity] || { variant: 'secondary' as const, label: severity }
+  return <Badge variant={variant}>{label}</Badge>
+}
+
+const recentFindings = [
+  { title: 'XSS Vulnerability', severity: 'high', endpoint: '/api/search', time: '2m ago' },
+  { title: 'Open Redirect', severity: 'medium', endpoint: '/login', time: '15m ago' },
+  { title: 'Info Disclosure', severity: 'low', endpoint: '/debug', time: '1h ago' },
+  { title: 'SQL Injection', severity: 'critical', endpoint: '/api/users', time: '3h ago' },
+]
+
+const riskData = [
+  { label: 'Critical', count: 2, pct: 15, color: 'bg-destructive' },
+  { label: 'High', count: 12, pct: 45, color: 'bg-orange-500' },
+  { label: 'Medium', count: 28, pct: 60, color: 'bg-amber-500' },
+  { label: 'Low', count: 205, pct: 90, color: 'bg-primary/40' },
+]
+
 export function Dashboard() {
   return (
-    <div>
-      {/* Header */}
-      <header className="mb-10 px-2 flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div>
-          <h1 className="text-4xl md:text-5xl font-light tracking-tight mb-2">Dashboard</h1>
-          <p className="text-brand-muted text-lg">Your attack surface overview</p>
-        </div>
+    <div className="space-y-8 pb-8">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-muted-foreground">Your attack surface overview at a glance</p>
+      </div>
 
-        {/* Stats */}
-        <div className="flex gap-8 items-end">
-          <div className="text-center">
-            <div className="text-sm text-brand-muted flex items-center gap-1 justify-center mb-1">
-              <Activity className="w-4 h-4" />
-              Active Scans
-            </div>
-            <div className="text-4xl font-light">3</div>
-          </div>
-          <div className="text-center">
-            <div className="text-sm text-brand-muted flex items-center gap-1 justify-center mb-1">
-              <Shield className="w-4 h-4" />
-              Findings
-            </div>
-            <div className="text-4xl font-light">247</div>
-          </div>
-        </div>
-      </header>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard icon={ScanLine} label="Active Scans" value="3" trend="2 running, 1 queued" />
+        <StatCard icon={AlertTriangle} label="Total Findings" value="247" trend="+18 in last 24h" />
+        <StatCard icon={Globe} label="Endpoints" value="1,432" trend="Across 5 targets" />
+        <StatCard icon={Shield} label="Vulnerabilities" value="42" trend="12 high, 2 critical" />
+      </div>
 
-      {/* Main Grid */}
-      <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Active Scans Card */}
-        <div className="card relative">
-          <div className="absolute top-6 right-6 w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-brand-muted hover:bg-gray-100 cursor-pointer">
-            <TrendingUp className="w-4 h-4" />
-          </div>
-          <h3 className="text-xl font-medium mb-1">Active Scans</h3>
-          <p className="text-sm text-brand-muted mb-8">Currently running</p>
-          <div className="flex items-end justify-between mb-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="lg:col-span-2">
+          <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <div className="text-4xl font-light mb-1">3</div>
-              <div className="text-xs text-brand-muted">In Progress</div>
+              <CardTitle>Recent Findings</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">Last 24 hours</p>
             </div>
-            <div className="badge-active">Running</div>
-          </div>
-
-          {/* Progress bars */}
-          <div className="space-y-3 mt-8">
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="font-medium">example.com</span>
-                <span className="text-brand-muted">Stage 8/13</span>
-              </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-brand-yellow rounded-full" style={{ width: '62%' }}></div>
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="font-medium">testsite.io</span>
-                <span className="text-brand-muted">Stage 3/13</span>
-              </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-brand-dark rounded-full" style={{ width: '23%' }}></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Recent Findings Card */}
-        <div className="card-dark row-span-2">
-          <div className="flex justify-between items-start mb-8">
-            <div>
-              <h3 className="text-xl font-medium mb-1">Recent Findings</h3>
-              <p className="text-sm text-gray-400">Last 24 hours</p>
-            </div>
-            <div className="text-3xl font-light text-brand-yellow">18</div>
-          </div>
-
-          <div className="space-y-4 flex-grow">
-            {[
-              { title: 'XSS Vulnerability', severity: 'high', endpoint: '/api/search' },
-              { title: 'Open Redirect', severity: 'medium', endpoint: '/login' },
-              { title: 'Info Disclosure', severity: 'low', endpoint: '/debug' },
-            ].map((finding, i) => (
-              <div key={i} className="flex items-center gap-4 group cursor-pointer">
-                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-brand-yellow transition-colors shrink-0">
-                  <Shield className="w-4 h-4 text-white group-hover:text-brand-dark" />
+            <Badge variant="default" className="text-xs">18 new</Badge>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1">
+              {recentFindings.map((f, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-4 rounded-lg p-3 hover:bg-muted/50 transition-colors cursor-pointer group"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-primary/5 flex items-center justify-center shrink-0 group-hover:bg-primary/10 transition-colors">
+                    <Shield className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{f.title}</p>
+                    <p className="text-xs text-muted-foreground truncate">{f.endpoint}</p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <SeverityBadge severity={f.severity} />
+                    <span className="text-xs text-muted-foreground">{f.time}</span>
+                  </div>
                 </div>
-                <div className="flex-grow">
-                  <h4 className="text-sm font-medium">{finding.title}</h4>
-                  <p className="text-xs text-gray-400">{finding.endpoint}</p>
+              ))}
+            </div>
+            <div className="mt-4 pt-4 border-t flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Showing 4 of 18 findings</span>
+              <button className="text-xs text-primary font-medium hover:underline inline-flex items-center gap-1">
+                View all <ArrowRight className="h-3 w-3" />
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Risk Overview</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {riskData.map((item) => (
+                <div key={item.label}>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">{item.label}</span>
+                    </div>
+                    <span className="text-sm text-muted-foreground">{item.count}</span>
+                  </div>
+                  <Progress value={item.pct} className="h-2" />
                 </div>
-                <div className={`px-2 py-1 rounded-full text-[10px] font-semibold ${
-                  finding.severity === 'high' ? 'bg-red-500/20 text-red-300' :
-                  finding.severity === 'medium' ? 'bg-yellow-500/20 text-yellow-300' :
-                  'bg-gray-500/20 text-gray-300'
-                }`}>
-                  {finding.severity}
+              ))}
+              <div className="pt-2 border-t">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Total</span>
+                  <span className="font-medium">247 findings</span>
                 </div>
               </div>
-            ))}
-          </div>
+            </CardContent>
+          </Card>
 
-          <div className="mt-6 pt-6 border-t border-white/10 flex justify-between items-center">
-            <span className="text-sm text-gray-400">View All</span>
-            <button className="text-brand-yellow hover:text-brand-yellow/80 transition-colors">→</button>
-          </div>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Active Scans</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <div className="flex justify-between text-sm mb-1.5">
+                  <span className="font-medium">example.com</span>
+                  <span className="text-muted-foreground">62%</span>
+                </div>
+                <Progress value={62} className="h-2 [&>div]:bg-yellow-500" />
+                <p className="text-xs text-muted-foreground mt-1">Stage 8/13 — Endpoint Extraction</p>
+              </div>
+              <div>
+                <div className="flex justify-between text-sm mb-1.5">
+                  <span className="font-medium">testsite.io</span>
+                  <span className="text-muted-foreground">23%</span>
+                </div>
+                <Progress value={23} className="h-2" />
+                <p className="text-xs text-muted-foreground mt-1">Stage 3/13 — Tech Detection</p>
+              </div>
+              <div className="pt-2 border-t">
+                <button className="text-xs text-primary font-medium hover:underline inline-flex items-center gap-1">
+                  View all scans <ArrowRight className="h-3 w-3" />
+                </button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
+      </div>
 
-        {/* Risk Overview Card */}
-        <div className="card">
-          <h3 className="text-xl font-medium mb-6">Risk Overview</h3>
-          <div className="space-y-3">
-            <div>
-              <div className="flex justify-between text-xs mb-2">
-                <span className="font-medium">Critical</span>
-                <span className="text-brand-muted">2</span>
-              </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-red-500 rounded-full" style={{ width: '15%' }}></div>
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-xs mb-2">
-                <span className="font-medium">High</span>
-                <span className="text-brand-muted">12</span>
-              </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-orange-500 rounded-full" style={{ width: '45%' }}></div>
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-xs mb-2">
-                <span className="font-medium">Medium</span>
-                <span className="text-brand-muted">28</span>
-              </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-yellow-500 rounded-full" style={{ width: '60%' }}></div>
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-xs mb-2">
-                <span className="font-medium">Low</span>
-                <span className="text-brand-muted">205</span>
-              </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-brand-dark rounded-full" style={{ width: '90%' }}></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Attack Surface Graph - Full Width */}
-        <div className="lg:col-span-3">
-          <h3 className="text-2xl font-light mb-4">Attack Surface Map</h3>
+      <Card>
+        <CardHeader>
+          <CardTitle>Attack Surface Map</CardTitle>
+          <p className="text-sm text-muted-foreground">Visual representation of your attack surface</p>
+        </CardHeader>
+        <CardContent>
           <AttackSurfaceGraph scanId="demo-scan" data={mockScanData} />
-        </div>
-      </main>
+        </CardContent>
+      </Card>
     </div>
   )
 }

@@ -5,56 +5,105 @@
 @tailwind utilities;
 
 @layer base {
-  body {
-    @apply bg-gradient-to-br from-[#F8F5F0] via-[#FDFBFA] to-[#FAF0D9] bg-fixed min-h-screen text-brand-text antialiased;
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    --radius: 0.75rem;
   }
-  
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 47 95% 60%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 47 95% 60%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+
   * {
     @apply selection:bg-brand-yellow selection:text-brand-dark;
   }
 }
 
 @layer components {
+  .card-gradient {
+    @apply bg-gradient-to-br from-[#F8F5F0] via-[#FDFBFA] to-[#FAF0D9] bg-fixed;
+  }
+
   .card {
     @apply bg-white rounded-4xl p-8 shadow-card hover:shadow-card-hover transition-all duration-300;
   }
-  
+
   .card-dark {
     @apply bg-brand-dark text-white rounded-4xl p-8 shadow-xl;
   }
-  
+
   .btn-primary {
     @apply px-6 py-3 rounded-full bg-brand-dark text-white font-medium hover:bg-brand-dark/90 transition-colors;
   }
-  
+
   .btn-secondary {
     @apply px-6 py-3 rounded-full bg-brand-yellow text-brand-dark font-medium hover:bg-brand-yellow/90 transition-colors;
   }
-  
+
   .input-field {
     @apply w-full px-4 py-3 rounded-2xl border border-gray-200 bg-white focus:border-brand-dark focus:ring-2 focus:ring-brand-yellow/20 outline-none transition-all;
   }
-  
+
   .badge {
     @apply px-3 py-1 rounded-full text-xs font-semibold;
   }
-  
+
   .badge-active {
     @apply badge bg-brand-yellow text-brand-dark;
   }
-  
+
   .badge-inactive {
     @apply badge bg-gray-100 text-gray-600;
   }
-  
+
   .nav-link {
     @apply px-6 py-2.5 rounded-full text-sm font-medium transition-colors;
   }
-  
+
   .nav-link-active {
     @apply nav-link bg-brand-dark text-white;
   }
-  
+
   .nav-link-inactive {
     @apply nav-link text-brand-muted hover:text-brand-text;
   }
@@ -64,7 +113,7 @@
   .glass {
     @apply bg-white/60 backdrop-blur-md border border-white/40;
   }
-  
+
   .text-balance {
     text-wrap: balance;
   }

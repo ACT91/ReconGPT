@@ -1,13 +1,21 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Eye, EyeOff, LogIn } from 'lucide-react'
 import { useLogin } from '@/hooks/useAuth'
 import { getApiError } from '@/services/api'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 export function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const login = useLogin()
   const [error, setError] = useState('')
+
+  const clearError = () => { if (error) setError('') }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -20,62 +28,113 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gray-950">
-      <div className="w-full max-w-md">
-        <div className="flex items-center gap-2 mb-8 justify-center">
-          <div className="w-8 h-8 rounded-full bg-brand-yellow" />
-          <span className="font-semibold text-2xl tracking-tight text-white">Reconny</span>
+    <div className="dark min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 relative overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-yellow-500/10 via-transparent to-transparent pointer-events-none" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-zinc-800/20 via-transparent to-transparent pointer-events-none" />
+
+      <div className="w-full max-w-md relative z-10">
+        <div className="flex flex-col items-center gap-3 mb-8">
+          <div className="w-10 h-10 rounded-full bg-yellow-400 flex items-center justify-center shadow-lg shadow-yellow-400/20">
+            <span className="text-zinc-900 font-bold text-lg">R</span>
+          </div>
+          <span className="font-semibold text-2xl tracking-tight text-foreground">Reconny</span>
         </div>
 
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-8">
-          <h1 className="text-3xl font-light mb-2 text-center text-white">Welcome Back</h1>
-          <p className="text-gray-400 text-center mb-8">Sign in to your account</p>
+        <Card className="border-border/50 shadow-2xl shadow-black/20 backdrop-blur-sm">
+          <CardHeader className="pb-4 text-center">
+            <CardTitle className="text-2xl">Welcome back</CardTitle>
+            <CardDescription className="text-base">
+              Sign in to your account to continue
+            </CardDescription>
+          </CardHeader>
 
-          {error && (
-            <div className="mb-4 p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">
-              {error}
-            </div>
-          )}
+          <CardContent>
+            {error && (
+              <div className="mb-6 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+                {error}
+              </div>
+            )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="you@example.com"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="••••••••"
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={login.isPending}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50"
-            >
-              {login.isPending ? 'Signing in...' : 'Sign In'}
-            </button>
-          </form>
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => { setEmail(e.target.value); clearError() }}
+                  placeholder="you@example.com"
+                  required
+                  autoComplete="email"
+                  autoFocus
+                />
+              </div>
 
-          <p className="mt-6 text-center text-sm text-gray-400">
-            Don&apos;t have an account?{' '}
-            <Link to="/register" className="text-blue-400 hover:text-blue-300">
-              Register
-            </Link>
-          </p>
-        </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Password</Label>
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => { setPassword(e.target.value); clearError() }}
+                  placeholder="Enter your password"
+                  required
+                  maxLength={128}
+                  autoComplete="current-password"
+                />
+              </div>
+
+              <Button
+                type="submit"
+                disabled={login.isPending}
+                className="w-full h-11"
+              >
+                {login.isPending ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Signing in...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <LogIn className="h-4 w-4" />
+                    Sign In
+                  </span>
+                )}
+              </Button>
+            </form>
+
+            <div className="mt-6 text-center text-sm text-muted-foreground">
+              Don&apos;t have an account?{' '}
+              <Link
+                to="/register"
+                className="text-primary hover:text-primary/80 font-medium transition-colors"
+              >
+                Create one
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+
+        <p className="mt-8 text-center text-xs text-muted-foreground/60">
+          &copy; {new Date().getFullYear()} Reconny. All rights reserved.
+        </p>
       </div>
     </div>
   )
