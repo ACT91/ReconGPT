@@ -15,7 +15,7 @@ from app.core.database import async_session_factory
 
 logger = get_logger(__name__)
 
-client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY, timeout=settings.AI_TIMEOUT)
+client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY, base_url=settings.AI_BASE_URL, timeout=settings.AI_TIMEOUT)
 
 
 async def generate_insights_from_results(
@@ -182,7 +182,7 @@ def _create_fallback_insight(target: str) -> Dict[str, Any]:
 class AIService:
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY, timeout=settings.AI_TIMEOUT)
+        self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY, base_url=settings.AI_BASE_URL, timeout=settings.AI_TIMEOUT)
 
     async def generate_executive_summary(self, job_id: UUID, target: str, results: Dict[str, Any]) -> Optional[AiInsight]:
         analysis = await analyze_scan_results(target, results)

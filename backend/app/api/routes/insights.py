@@ -55,9 +55,9 @@ async def get_job_insights(
     if priority:
         query = query.where(AiInsight.priority == priority)
     if actionable_only:
-        query = query.where(AiInsight.is_actionable == True)
+        query = query.where(AiInsight.is_actionable == 1)
     
-    query = query.where(AiInsight.is_dismissed == False)
+    query = query.where(AiInsight.is_dismissed == 0)
     
     count_query = select(func.count()).select_from(query.subquery())
     total_result = await db.execute(count_query)
@@ -101,7 +101,7 @@ async def get_executive_summary(
         .where(
             AiInsight.scan_job_id == job_id,
             AiInsight.insight_type == InsightType.EXECUTIVE_SUMMARY,
-            AiInsight.is_dismissed == False,
+            AiInsight.is_dismissed == 0,
         )
         .order_by(desc(AiInsight.created_at))
         .limit(1)
@@ -223,7 +223,7 @@ async def get_attack_vectors(
                 InsightType.HIGH_PRIORITY_TARGETS,
                 InsightType.VULNERABILITY_PRIORITIZATION,
             ]),
-            AiInsight.is_dismissed == False,
+            AiInsight.is_dismissed == 0,
         )
         .order_by(desc(AiInsight.priority_score))
     )

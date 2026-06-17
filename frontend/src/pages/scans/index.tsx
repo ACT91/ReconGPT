@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import {
   useReactTable,
   getCoreRowModel,
@@ -14,6 +15,7 @@ import { scanApi, getApiError } from '@/services/api'
 import { useScanWebSocket } from '@/hooks/useScanWebSocket'
 import { ScanProgressBar, StatusBadge, LiveLogsViewer, SkeletonTable, ErrorBoundary } from '@/components/common'
 import type { ScanJob, ScanProgress, ScanLogEntry } from '@/types'
+import { Globe, Network, AlertTriangle, Bot, FileText } from 'lucide-react'
 
 const columnHelper = createColumnHelper<ScanJob>()
 
@@ -148,6 +150,24 @@ function ScanDetailPanel({ job, onClose }: { job: ScanJob; onClose: () => void }
             </div>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">&times;</button>
+        </div>
+
+        <div className="px-4 py-2 border-b border-gray-800 flex gap-3">
+          <Link to={`/assets/${job.id}`} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-blue-400 transition-colors">
+            <Globe className="h-3.5 w-3.5" /> Assets
+          </Link>
+          <Link to={`/endpoints/${job.id}`} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-blue-400 transition-colors">
+            <Network className="h-3.5 w-3.5" /> Endpoints
+          </Link>
+          <Link to={`/findings/${job.id}`} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-blue-400 transition-colors">
+            <AlertTriangle className="h-3.5 w-3.5" /> Findings
+          </Link>
+          <Link to={`/ai-analysis/${job.id}`} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-blue-400 transition-colors">
+            <Bot className="h-3.5 w-3.5" /> AI Analysis
+          </Link>
+          <Link to={`/reports/${job.id}`} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-blue-400 transition-colors">
+            <FileText className="h-3.5 w-3.5" /> Reports
+          </Link>
         </div>
 
         <div className="flex border-b border-gray-800">

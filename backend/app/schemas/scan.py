@@ -62,6 +62,7 @@ ScanResponse = ScanJobResponse
 
 class ScanCancelRequest(BaseSchema):
     reason: Optional[str] = None
+    force: Optional[bool] = None
 
 
 class ScanLogEntry(BaseSchema):

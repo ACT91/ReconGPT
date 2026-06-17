@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { insightApi, resultApi } from '@/services/api'
 import { SeverityBadge, Skeleton, ErrorBoundary } from '@/components/common'
@@ -88,8 +89,9 @@ function VsSeverityChart({ stats }: { stats: AggregatedStats }) {
 }
 
 export function AIAnalysisPage() {
-  const [jobId, setJobId] = useState('')
-  const [inputJobId, setInputJobId] = useState('')
+  const { scanId } = useParams<{ scanId: string }>()
+  const [jobId, setJobId] = useState(scanId || '')
+  const [inputJobId, setInputJobId] = useState(scanId || '')
 
   const { data: summary, isLoading: summaryLoading } = useQuery({
     queryKey: ['ai-summary', jobId],

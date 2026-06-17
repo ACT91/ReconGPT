@@ -309,9 +309,11 @@ async def _save_results_to_db(job_id: str):
             subdomains_file = storage_path / "subdomains.txt"
             if subdomains_file.exists():
                 lines = subdomains_file.read_text(encoding="utf-8", errors="ignore").split('\n')
+                seen_names = set()
                 for line in lines:
                     line = line.strip()
-                    if line:
+                    if line and line not in seen_names:
+                        seen_names.add(line)
                         existing = await session.execute(
                             select(Subdomain).where(
                                 Subdomain.scan_job_id == job.id,
@@ -325,15 +327,23 @@ async def _save_results_to_db(job_id: str):
                             )
                             session.add(sd)
             
-            live_hosts_file = storage_path / "live_hosts.json"
+            live_hosts_file = storage_path / "live_hosts.txt"
             if live_hosts_file.exists():
                 import json
                 with open(live_hosts_file) as f:
-                    hosts = json.load(f)
-                for host in hosts if isinstance(hosts, list) else []:
-                    if isinstance(host, dict):
-                        name = host.get("host", host.get("url", ""))
-                        if name:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            host = json.loads(line)
+                            if not isinstance(host, dict):
+                                continue
+                            
+                            name = host.get("host") or host.get("input")
+                            if not name:
+                                continue
+                            
                             subdomain = await session.execute(
                                 select(Subdomain).where(
                                     Subdomain.scan_job_id == job.id,
@@ -343,23 +353,34 @@ async def _save_results_to_db(job_id: str):
                             sd = subdomain.scalar_one_or_none()
                             if sd:
                                 sd.is_alive = True
-                                sd.status_code = host.get("status_code") or host.get("status")
+                                sd.status_code = host.get("status_code")
                                 sd.title = host.get("title")
-                                sd.web_server = host.get("webserver") or host.get("web_server")
-                                sd.content_length = host.get("content_length") or host.get("content-length")
-                                sd.technologies = host.get("technologies", [])
+                                sd.web_server = host.get("webserver")
+                                sd.content_length = host.get("content_length")
+                                sd.technologies = host.get("tech", [])
+                                sd.ips = host.get("a", [])
+                                sd.cname = host.get("cname", [None])[0] if host.get("cname") else None
                                 sd.probed_at = datetime.now(timezone.utc)
+                                from app.models.subdomain import SubdomainStatus
+                                sd.status = SubdomainStatus.ALIVE
+                        except json.JSONDecodeError:
+                            continue
             
             endpoints_file = storage_path / "endpoints_merged.txt"
             if endpoints_file.exists():
                 lines = endpoints_file.read_text(encoding="utf-8", errors="ignore").split('\n')
+                seen_urls = set()
                 for line in lines:
                     line = line.strip()
                     if line:
+                        normalized = line.rstrip('/')
+                        if normalized in seen_urls:
+                            continue
+                        seen_urls.add(normalized)
                         existing = await session.execute(
                             select(Endpoint).where(
                                 Endpoint.scan_job_id == job.id,
-                                Endpoint.normalized_url == line.rstrip('/'),
+                                Endpoint.normalized_url == normalized,
                             )
                         )
                         if not existing.scalar_one_or_none():
@@ -368,7 +389,7 @@ async def _save_results_to_db(job_id: str):
                             ep = Endpoint(
                                 scan_job_id=job.id,
                                 url=line,
-                                normalized_url=line.rstrip('/'),
+                                normalized_url=normalized,
                                 path=parsed.path or "/",
                                 source=EndpointSource.RECONSTRUCTED,
                             )

@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useParams } from 'react-router-dom'
 import {
   useReactTable,
   getCoreRowModel,
@@ -58,8 +59,9 @@ function SourceFilter({
 }
 
 export function EndpointsPage() {
-  const [jobId, setJobId] = useState('')
-  const [inputJobId, setInputJobId] = useState('')
+  const { scanId } = useParams<{ scanId: string }>()
+  const [jobId, setJobId] = useState(scanId || '')
+  const [inputJobId, setInputJobId] = useState(scanId || '')
   const [sorting, setSorting] = useState<SortingState>([{ id: 'url', desc: false }])
   const [sourceFilter, setSourceFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')

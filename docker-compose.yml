@@ -7,6 +7,8 @@ x-shared-environment: &shared-environment
   CELERY_RESULT_BACKEND: redis://redis:6379/2
   SECRET_KEY: ${SECRET_KEY:-super-secret-key-change-in-production}
   OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-your-key-here}
+  AI_BASE_URL: ${AI_BASE_URL:-https://api.opencode.dev/v1}
+  AI_MODEL: ${AI_MODEL:-deepseek-v4-flash-free}
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   LOG_FORMAT: ${LOG_FORMAT:-json}
   ENVIRONMENT: ${ENVIRONMENT:-development}

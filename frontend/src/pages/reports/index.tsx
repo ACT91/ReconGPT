@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { resultApi, scanApi, getApiError } from '@/services/api'
 import { ErrorBoundary, Skeleton, StatusBadge } from '@/components/common'
@@ -257,8 +258,9 @@ function ReportPreview({ jobId }: { jobId: string }) {
 }
 
 export function ReportsPage() {
-  const [jobId, setJobId] = useState('')
-  const [inputJobId, setInputJobId] = useState('')
+  const { scanId } = useParams<{ scanId: string }>()
+  const [jobId, setJobId] = useState(scanId || '')
+  const [inputJobId, setInputJobId] = useState(scanId || '')
 
   return (
     <div>

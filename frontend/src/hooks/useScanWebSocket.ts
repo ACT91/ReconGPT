@@ -61,7 +61,9 @@ export function useScanWebSocket({
       }
 
       ws.onerror = () => {
-        ws.close()
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.close()
+        }
       }
     } catch {
       reconnectTimeoutRef.current = window.setTimeout(() => {
@@ -76,7 +78,9 @@ export function useScanWebSocket({
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current)
       if (wsRef.current) {
         wsRef.current.onclose = null
-        wsRef.current.close()
+        if (wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.close()
+        }
         wsRef.current = null
       }
     }

@@ -25,7 +25,23 @@ class UrlReconstructStage(PipelineStageBase):
                     missing.append("live_hosts.txt")
                 return {"success": False, "error": f"Missing files: {', '.join(missing)}"}
             
-            live_hosts = self.read_lines("live_hosts.txt")
+            # Extract URLs from JSONL format
+            import json
+            live_hosts = []
+            with open(live_hosts_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            data = json.loads(line)
+                            url = data.get('url')
+                            if url:
+                                live_hosts.append(url)
+                        except json.JSONDecodeError:
+                            # Fallback for plain text
+                            if line.startswith(('http://', 'https://')):
+                                live_hosts.append(line)
+            
             endpoints = self.read_lines("endpoints_merged.txt")
             
             full_urls: Set[str] = set()

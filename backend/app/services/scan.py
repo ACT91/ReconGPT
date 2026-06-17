@@ -156,9 +156,19 @@ class ScanService:
         
         progress = STAGE_PROGRESS.get(stage, 0)
         
+        is_started = started_at is not None
+        if error:
+            status = ScanStatus.FAILED
+        elif completed_at:
+            status = ScanStatus.COMPLETED
+        elif is_started:
+            status = ScanStatus.RUNNING
+        else:
+            status = ScanStatus.PENDING
+
         return ScanStageProgress(
             stage=stage,
-            status=ScanStatus.COMPLETED if completed_at else ScanStatus.RUNNING,
+            status=status,
             progress=progress,
             started_at=started_at,
             completed_at=completed_at,
@@ -195,10 +205,10 @@ class ScanService:
         return ScanLogsResponse(
             logs=[ScanLogEntry(
                 timestamp=log.timestamp,
-                level=log.level,
+                level=log.level.value if log.level else None,
                 message=log.message,
-                stage=log.stage.value if log.stage else None,
-                metadata=log.metadata,
+                stage=log.stage if log.stage else None,
+                metadata=log.details,
             ) for log in logs],
             total=total,
             has_more=(pagination.page * page_size) < total if pagination else False,

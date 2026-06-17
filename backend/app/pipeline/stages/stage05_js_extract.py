@@ -19,7 +19,14 @@ class JsExtractStage(PipelineStageBase):
         try:
             katana_output = self.output_dir / "katana" / "katana_output.txt"
             if not katana_output.exists():
-                return {"success": False, "error": "Katana output not found"}
+                await self.warning("Katana output not found - no URLs to extract JS from")
+                result_data = {
+                    "success": True,
+                    "js_files_count": 0,
+                    "output_file": str(self.output_dir / "js_files.txt"),
+                }
+                await self.mark_completed(result_data)
+                return result_data
             
             js_files: Set[str] = set()
             

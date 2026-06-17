@@ -56,7 +56,8 @@ class Settings(BaseSettings):
 
     # AI / OpenAI
     OPENAI_API_KEY: str
-    AI_MODEL: str = "gpt-4o"
+    AI_BASE_URL: str = "https://api.opencode.dev/v1"
+    AI_MODEL: str = "deepseek-v4-flash-free"
     AI_TEMPERATURE: float = 0.3
     AI_MAX_TOKENS: int = 4096
     AI_TIMEOUT: int = 120

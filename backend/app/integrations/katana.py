@@ -17,7 +17,6 @@ async def run_katana(
         "-list", str(input_file),
         "-o", str(output_file),
         "-silent",
-        "-jc",
         "-kf", "all",
         "-depth", str(depth),
         "-c", "50",

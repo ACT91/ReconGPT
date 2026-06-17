@@ -56,7 +56,7 @@ async def get_results_overview(
     alive_count = await db.execute(
         select(func.count(Subdomain.id)).where(
             Subdomain.scan_job_id == job_id,
-            Subdomain.is_alive == True,
+            Subdomain.is_alive.is_(True),
         )
     )
     endpoints_count = await db.execute(

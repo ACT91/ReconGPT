@@ -18,11 +18,35 @@ class WebCrawlStage(PipelineStageBase):
             if not input_file.exists():
                 return {"success": False, "error": "live_hosts.txt not found"}
             
+            # Extract URLs from JSONL format for Katana
+            import json
+            urls = []
+            with open(input_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            data = json.loads(line)
+                            url = data.get('url')
+                            if url:
+                                urls.append(url)
+                        except json.JSONDecodeError:
+                            continue
+            
+            if not urls:
+                await self.warning("No URLs found in live_hosts.txt")
+                return {"success": True, "urls_count": 0}
+            
+            # Create plain text URL list for Katana
+            katana_input = self.output_dir / "live_urls.txt"
+            katana_input.write_text('\n'.join(urls), encoding='utf-8')
+            await self.info(f"Prepared {len(urls)} URLs for crawling")
+            
             output_dir = self.output_dir / "katana"
             output_dir.mkdir(exist_ok=True)
             
             await self.info("Starting web crawling with Katana")
-            result = await run_katana(input_file, output_dir)
+            result = await run_katana(katana_input, output_dir)
             
             if not result.get("success"):
                 await self.warning(f"Katana crawl had issues: {result.get('error', 'Unknown')}")

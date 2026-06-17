@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useParams } from 'react-router-dom'
 import {
   useReactTable,
   getCoreRowModel,
@@ -92,8 +93,9 @@ function VulnDetailPanel({ vuln, onClose, onToggleFP }: { vuln: Vulnerability; o
 }
 
 export function FindingsPage() {
-  const [jobId, setJobId] = useState('')
-  const [inputJobId, setInputJobId] = useState('')
+  const { scanId } = useParams<{ scanId: string }>()
+  const [jobId, setJobId] = useState(scanId || '')
+  const [inputJobId, setInputJobId] = useState(scanId || '')
   const [severityFilter, setSeverityFilter] = useState('')
   const [showFP, setShowFP] = useState<'all' | 'real' | 'fp'>('all')
   const [sorting, setSorting] = useState<SortingState>([{ id: 'severity', desc: true }])

@@ -59,9 +59,13 @@ export function AppRouter() {
         <Route path="/assets" element={<AssetsPage />} />
         <Route path="/assets/:scanId" element={<AssetsPage />} />
         <Route path="/endpoints" element={<EndpointsPage />} />
+        <Route path="/endpoints/:scanId" element={<EndpointsPage />} />
         <Route path="/findings" element={<FindingsPage />} />
+        <Route path="/findings/:scanId" element={<FindingsPage />} />
         <Route path="/ai-analysis" element={<AIAnalysisPage />} />
+        <Route path="/ai-analysis/:scanId" element={<AIAnalysisPage />} />
         <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/reports/:scanId" element={<ReportsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
 

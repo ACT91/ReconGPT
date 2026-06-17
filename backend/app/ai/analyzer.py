@@ -14,7 +14,7 @@ from app.core.logger import get_logger
 
 logger = get_logger(__name__)
 
-client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY, timeout=settings.AI_TIMEOUT)
+client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY, base_url=settings.AI_BASE_URL, timeout=settings.AI_TIMEOUT)
 
 
 def _get_encoding():

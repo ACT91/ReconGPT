@@ -42,6 +42,8 @@ class SubdomainEnumStage(PipelineStageBase):
                 await self.warning(f"Gau failed: {gau_result.get('error', 'Unknown error')}")
             
             unique_subdomains = sorted(set(all_subdomains))
+            if self.target not in unique_subdomains:
+                unique_subdomains.append(self.target)
             self.write_lines("subdomains.txt", unique_subdomains)
             
             await self.info(f"Total unique subdomains: {len(unique_subdomains)}")

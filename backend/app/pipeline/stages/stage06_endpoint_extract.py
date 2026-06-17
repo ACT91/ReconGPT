@@ -21,7 +21,10 @@ class EndpointExtractStage(PipelineStageBase):
         try:
             katana_output = self.output_dir / "katana" / "katana_output.txt"
             if not katana_output.exists():
-                return {"success": False, "error": "Katana output not found"}
+                await self.warning("Katana output not found, creating empty endpoint file")
+                output_file = self.output_dir / "endpoints_crawl.txt"
+                output_file.write_text('', encoding='utf-8')
+                return {"success": True, "endpoints_count": 0}
             
             endpoints: Set[str] = set()
             
@@ -45,7 +48,10 @@ class EndpointExtractStage(PipelineStageBase):
             output_file = self.output_dir / "endpoints_crawl.txt"
             output_file.write_text('\n'.join(ep_list), encoding='utf-8')
             
-            await self.info(f"Extracted {len(endpoints)} unique endpoints from crawl")
+            if len(endpoints) == 0:
+                await self.warning("No endpoints extracted from crawl (file empty or only static resources)")
+            else:
+                await self.info(f"Extracted {len(endpoints)} unique endpoints from crawl")
             
             result_data = {
                 "success": True,
