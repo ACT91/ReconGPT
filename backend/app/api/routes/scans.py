@@ -19,7 +19,7 @@ from app.models.pipeline_log import PipelineLog
 from app.schemas.scan import (
     ScanRequest,
     ScanConfig,
-    ScanResponse,
+    ScanStartResponse,
     ScanJobResponse,
     ScanJobListResponse,
     ScanJobDetailResponse,
@@ -42,7 +42,7 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/scans", tags=["Scans"])
 
 
-@router.post("/start", response_model=ScanResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/start", response_model=ScanStartResponse, status_code=status.HTTP_201_CREATED)
 async def start_scan(
     request: ScanRequest,
     current_user: User = Depends(get_current_active_user),
@@ -56,7 +56,7 @@ async def start_scan(
         user_id=current_user.id,
         target_domain=request.target_domain,
         project_id=request.project_id,
-        scan_config=request.scan_config or {},
+        scan_config=request.config.model_dump() if request.config else {},
     )
 
     execute_full_pipeline.delay(str(job.id))
@@ -68,9 +68,10 @@ async def start_scan(
         target=request.target_domain,
     )
 
-    return ScanResponse(
+    return ScanStartResponse(
         job_id=job.id,
         status=job.status,
+        target_domain=job.target_domain,
         message=f"Scan queued for {request.target_domain}",
     )
 
@@ -341,7 +342,7 @@ async def cancel_scan(
     return {"message": "Scan cancelled successfully", "job_id": str(job_id)}
 
 
-@router.post("/{job_id}/retry", response_model=ScanResponse)
+@router.post("/{job_id}/retry", response_model=ScanStartResponse)
 async def retry_scan(
     job_id: UUID,
     current_user: User = Depends(get_current_active_user),
@@ -368,9 +369,10 @@ async def retry_scan(
         new_job=str(new_job.id),
     )
     
-    return ScanResponse(
+    return ScanStartResponse(
         job_id=new_job.id,
         status=new_job.status,
+        target_domain=job.target_domain,
         message=f"Scan retry queued for {job.target_domain}",
     )
 

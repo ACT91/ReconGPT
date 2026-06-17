@@ -1,5 +1,5 @@
-from pathlib import Path
 import asyncio
+from pathlib import Path
 from datetime import datetime, timezone
 from uuid import UUID
 from celery import chain, chord, group
@@ -38,6 +38,22 @@ from app.ai.service import save_insights_to_db
 
 logger = get_logger(__name__)
 
+
+_worker_loop = None
+
+
+def _get_loop():
+    global _worker_loop
+    if _worker_loop is None:
+        _worker_loop = asyncio.new_event_loop()
+    return _worker_loop
+
+
+def run_async(coro):
+    loop = _get_loop()
+    return loop.run_until_complete(coro)
+
+
 STAGE_CLASS_MAP = {
     PipelineStage.SUBDOMAIN_ENUM: SubdomainEnumStage,
     PipelineStage.LIVE_PROBE: LiveProbeStage,
@@ -53,14 +69,6 @@ STAGE_CLASS_MAP = {
     PipelineStage.VULN_SCAN: VulnScanStage,
     PipelineStage.AI_ANALYSIS: AiAnalysisStage,
 }
-
-
-def run_async(coro):
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
 
 
 @celery_app.task(name="execute_scan_stage", bind=True, max_retries=2, default_retry_delay=30)
@@ -99,7 +107,12 @@ def execute_scan_stage(self, job_id: str, stage_name: str):
                 storage_path=Path(settings.STORAGE_PATH),
             )
             
-            result = await stage_instance.execute()
+            import traceback as _tb
+            try:
+                result = await stage_instance.execute()
+            except Exception as inner_e:
+                logger.error("stage_inner_execution_failed", job_id=job_id, stage=stage_name, error=str(inner_e), traceback=_tb.format_exc())
+                raise
             
             async with async_session_factory() as session:
                 s_result = await session.execute(
@@ -123,7 +136,9 @@ def execute_scan_stage(self, job_id: str, stage_name: str):
         return run_async(run_stage())
         
     except Exception as e:
-        logger.error("stage_execution_failed", job_id=job_id, stage=stage_name, error=str(e))
+        import traceback
+        tb = traceback.format_exc()
+        logger.error("stage_execution_failed", job_id=job_id, stage=stage_name, error=str(e), traceback=tb)
         
         run_async(_update_job_failed(job_id, str(e)))
         

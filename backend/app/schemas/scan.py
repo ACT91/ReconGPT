@@ -49,6 +49,13 @@ class ScanJobDetailResponse(ScanJobResponse):
     scan_metadata: Optional[Dict[str, Any]] = None
 
 
+class ScanStartResponse(BaseSchema):
+    job_id: UUID
+    status: str
+    target_domain: str
+    message: str
+
+
 # Alias for backward compatibility
 ScanResponse = ScanJobResponse
 

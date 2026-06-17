@@ -12,6 +12,7 @@ import type {
   PaginatedResponse,
   PaginationParams,
   Subdomain,
+  Endpoint,
   Vulnerability,
   APIKey,
   APIKeyCreate,
@@ -151,6 +152,11 @@ export const scanApi = {
 
   retry: (id: string) =>
     api.post<ScanResponse>(`/scans/${id}/retry`).then((r) => r.data),
+
+  markFalsePositive: (jobId: string, vulnId: string, is_false_positive: boolean) =>
+    api.patch(`/scans/${jobId}/vulnerabilities/${vulnId}`, {
+      is_false_positive,
+    }).then((r) => r.data),
 }
 
 export const resultApi = {
@@ -158,13 +164,26 @@ export const resultApi = {
     api.get(`/results/${id}/overview`).then((r) => r.data),
 
   getFull: (id: string) =>
-    api.get(`/results/${id}`).then((r) => r.data),
+    api.get<{
+      scan_job: ScanJob
+      subdomains: Subdomain[]
+      endpoints: Endpoint[]
+      vulnerabilities: Vulnerability[]
+      ai_insights: AiInsight[]
+      aggregated_stats: AggregatedStats
+      total_subdomains: number
+      total_endpoints: number
+      total_vulnerabilities: number
+    }>(`/results/${id}`).then((r) => r.data),
 
   getStats: (id: string) =>
     api.get<AggregatedStats>(`/results/${id}/stats`).then((r) => r.data),
 
   getGraph: (id: string) =>
     api.get(`/results/${id}/graph`).then((r) => r.data),
+
+  getEndpoints: (id: string) =>
+    api.get<PaginatedResponse<Endpoint>>(`/results/${id}/endpoints`).then((r) => r.data),
 }
 
 export const insightApi = {

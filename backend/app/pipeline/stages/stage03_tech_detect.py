@@ -14,10 +14,15 @@ class TechDetectStage(PipelineStageBase):
         try:
             live_hosts_json = self.output_dir / "live_hosts.json"
             if not live_hosts_json.exists():
-                await self.warning("live_hosts.json not found, using httpx JSON output")
-                alt_json = self.output_dir / "live_hosts.json"
-                if not alt_json.exists():
-                    return await self._handle_missing("live_hosts.json")
+                await self.warning("No live hosts JSON found — no live hosts were detected, skipping tech detection")
+                result_data = {
+                    "success": True,
+                    "technologies_count": 0,
+                    "skipped": True,
+                    "message": "No live hosts to detect technologies from",
+                }
+                await self.mark_completed(result_data)
+                return result_data
             
             live_data = self.read_json("live_hosts.json") or []
             

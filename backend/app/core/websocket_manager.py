@@ -19,10 +19,17 @@ class ConnectionManager:
         self._pubsub_task: Optional[asyncio.Task] = None
 
     async def connect_redis(self):
-        self.redis_client = redis.from_url(str(settings.REDIS_URL))
-        self.pubsub = self.redis_client.pubsub()
-        await self.pubsub.subscribe("scan_updates")
-        self._pubsub_task = asyncio.create_task(self._listen_for_updates())
+        try:
+            self.redis_client = redis.from_url(str(settings.REDIS_URL), socket_connect_timeout=3)
+            await self.redis_client.ping()
+            self.pubsub = self.redis_client.pubsub()
+            await self.pubsub.subscribe("scan_updates")
+            self._pubsub_task = asyncio.create_task(self._listen_for_updates())
+            logger.info("websocket_redis_connected")
+        except Exception as e:
+            logger.warning("websocket_redis_unavailable", error=str(e))
+            self.redis_client = None
+            self.pubsub = None
 
     async def _listen_for_updates(self):
         if not self.pubsub:

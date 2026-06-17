@@ -36,8 +36,15 @@ class PipelineStageBase(ABC):
         raise NotImplementedError
 
     async def log(self, level: LogLevel, message: str, details: Optional[Dict[str, Any]] = None) -> None:
-        logger.log(
-            level.value.upper(),
+        log_methods = {
+            LogLevel.DEBUG: logger.debug,
+            LogLevel.INFO: logger.info,
+            LogLevel.WARNING: logger.warning,
+            LogLevel.ERROR: logger.error,
+            LogLevel.CRITICAL: logger.critical,
+        }
+        method = log_methods.get(level, logger.info)
+        method(
             f"[{self.job_id}] {message}",
             job_id=self.job_id,
             stage=self.stage_name.value if self.stage_name else None,

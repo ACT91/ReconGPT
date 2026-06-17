@@ -15,14 +15,27 @@ from app.core.logger import get_logger
 logger = get_logger(__name__)
 
 client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY, timeout=settings.AI_TIMEOUT)
-encoding = tiktoken.get_encoding("cl100k_base")
+
+
+def _get_encoding():
+    try:
+        return tiktoken.get_encoding("cl100k_base")
+    except Exception:
+        return None
+
+
+encoding = _get_encoding()
 
 
 def count_tokens(text: str) -> int:
+    if encoding is None:
+        return 0
     return len(encoding.encode(text))
 
 
 def truncate_to_token_limit(text: str, max_tokens: int = 8000) -> str:
+    if encoding is None:
+        return text
     tokens = encoding.encode(text)
     if len(tokens) <= max_tokens:
         return text

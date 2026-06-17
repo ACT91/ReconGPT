@@ -122,7 +122,8 @@ class ScanService:
         
         return ScanProgressResponse(
             job_id=job.id,
-            overall_status=job.status,
+            target_domain=job.target_domain,
+            status=job.status,
             overall_progress=job.progress_percent,
             current_stage=job.current_stage,
             stages=stages,
@@ -141,13 +142,13 @@ class ScanService:
         
         started_at = None
         completed_at = None
-        error_message = None
+        error = None
         
         for log in logs:
             if log.level == "info" and "started" in log.message.lower():
                 started_at = log.timestamp
             elif log.level in ["error", "critical"]:
-                error_message = log.message
+                error = log.message
                 if not completed_at:
                     completed_at = log.timestamp
             elif log.level == "info" and "completed" in log.message.lower():
@@ -158,10 +159,10 @@ class ScanService:
         return ScanStageProgress(
             stage=stage,
             status=ScanStatus.COMPLETED if completed_at else ScanStatus.RUNNING,
-            progress_percent=progress,
+            progress=progress,
             started_at=started_at,
             completed_at=completed_at,
-            error_message=error_message,
+            error=error,
         )
 
     async def get_job_logs(
@@ -190,12 +191,17 @@ class ScanService:
         result = await self.db.execute(query)
         logs = result.scalars().all()
         
+        page_size = pagination.page_size if pagination else 50
         return ScanLogsResponse(
-            items=logs,
+            logs=[ScanLogEntry(
+                timestamp=log.timestamp,
+                level=log.level,
+                message=log.message,
+                stage=log.stage.value if log.stage else None,
+                metadata=log.metadata,
+            ) for log in logs],
             total=total,
-            page=pagination.page if pagination else 1,
-            page_size=pagination.page_size if pagination else 50,
-            total_pages=(total + (pagination.page_size if pagination else 50) - 1) // (pagination.page_size if pagination else 50),
+            has_more=(pagination.page * page_size) < total if pagination else False,
         )
 
     async def get_scan_results(self, job_id: UUID) -> Dict[str, Any]:

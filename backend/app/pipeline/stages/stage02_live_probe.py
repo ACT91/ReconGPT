@@ -29,16 +29,20 @@ class LiveProbeStage(PipelineStageBase):
                 return {"success": False, "error": result.get("error")}
             
             live_hosts = self.read_lines("live_hosts.txt")
-            await self.info(f"Found {len(live_hosts)} live hosts")
             
-            live_data = self.read_json("live_hosts.json") or []
-            await self.info("Technology detection data captured")
+            has_json = json_output.exists()
+            if has_json:
+                live_data = self.read_json("live_hosts.json") or []
+                await self.info(f"Found {len(live_hosts)} live hosts, {len(live_data)} with tech data")
+            else:
+                await self.info(f"Found {len(live_hosts)} live hosts (no JSON details)")
             
             result_data = {
                 "success": True,
                 "live_hosts_count": len(live_hosts),
+                "has_json": has_json,
                 "output_file": str(output_file),
-                "json_output": str(json_output),
+                "json_output": str(json_output) if has_json else None,
             }
             
             await self.mark_completed(result_data)

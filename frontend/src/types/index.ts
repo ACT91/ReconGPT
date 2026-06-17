@@ -126,15 +126,22 @@ export interface Subdomain {
 
 export interface Endpoint {
   id: string
+  subdomain_id?: string
   url: string
+  normalized_url: string
   path?: string
   method: string
+  source: string
+  status: string
   status_code?: number
   content_type?: string
+  content_length?: number
   title?: string
-  status?: string
-  source?: string
-  tech_stack?: string[]
+  technologies: string[]
+  response_time_ms?: number
+  parameters: Record<string, unknown>
+  discovered_at: string
+  probed_at?: string
 }
 
 export interface Vulnerability {
