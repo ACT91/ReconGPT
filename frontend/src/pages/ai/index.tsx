@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { insightApi, resultApi } from '@/services/api'
@@ -92,6 +92,14 @@ export function AIAnalysisPage() {
   const { scanId } = useParams<{ scanId: string }>()
   const [jobId, setJobId] = useState(scanId || '')
   const [inputJobId, setInputJobId] = useState(scanId || '')
+
+  // Auto-load when scanId is in URL
+  useEffect(() => {
+    if (scanId && scanId !== jobId) {
+      setJobId(scanId)
+      setInputJobId(scanId)
+    }
+  }, [scanId])
 
   const { data: summary, isLoading: summaryLoading } = useQuery({
     queryKey: ['ai-summary', jobId],

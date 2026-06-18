@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   useReactTable,
@@ -102,6 +102,14 @@ export function FindingsPage() {
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 50 })
   const [selectedVuln, setSelectedVuln] = useState<Vulnerability | null>(null)
   const queryClient = useQueryClient()
+
+  // Auto-load when scanId is in URL
+  useEffect(() => {
+    if (scanId && scanId !== jobId) {
+      setJobId(scanId)
+      setInputJobId(scanId)
+    }
+  }, [scanId])
 
   const { data, isLoading } = useQuery({
     queryKey: ['vulnerabilities', jobId, pagination, sorting, severityFilter],

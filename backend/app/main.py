@@ -12,7 +12,7 @@ import structlog
 from app.core.config import settings
 from app.core.logger import setup_logging
 from app.core.database import engine, Base
-from app.api.routes import auth, scans, projects, results, insights
+from app.api.routes import auth, scans, projects, results, insights, dashboard
 from app.schemas.common import HealthCheckResponse
 from app.core.logger import get_logger
 from app.core.exceptions import (
@@ -256,6 +256,7 @@ app.include_router(projects.router, prefix=settings.API_V1_PREFIX)
 app.include_router(scans.router, prefix=settings.API_V1_PREFIX)
 app.include_router(results.router, prefix=settings.API_V1_PREFIX)
 app.include_router(insights.router, prefix=settings.API_V1_PREFIX)
+app.include_router(dashboard.router, prefix=settings.API_V1_PREFIX)
 
 
 @app.get("/", tags=["Root"])

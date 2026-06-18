@@ -276,6 +276,39 @@ export interface ApiError {
   request_id?: string
 }
 
+export interface DashboardData {
+  scans: {
+    total: number
+    running: number
+    queued: number
+    completed: number
+    failed: number
+  }
+  assets: {
+    total_subdomains: number
+    total_endpoints: number
+  }
+  vulnerabilities: {
+    total: number
+    by_severity: Record<string, number>
+  }
+  recent_findings: {
+    id: string
+    name: string
+    severity: string
+    url: string
+    discovered_at: string | null
+  }[]
+  active_scans: {
+    id: string
+    target_domain: string
+    status: string
+    progress_percent: number
+    current_stage: string | null
+    created_at: string
+  }[]
+}
+
 export type WSMessage = {
   job_id: string
   type: 'progress' | 'log' | 'status'

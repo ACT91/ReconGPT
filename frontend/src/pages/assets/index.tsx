@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   useReactTable,
   getCoreRowModel,
@@ -24,6 +24,14 @@ export function AssetsPage() {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'name', desc: false }])
   const [filterAlive, setFilterAlive] = useState<'all' | 'alive' | 'dead'>('all')
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 50 })
+
+  // Auto-load when scanId is in URL
+  useEffect(() => {
+    if (scanId && scanId !== jobId) {
+      setJobId(scanId)
+      setInputJobId(scanId)
+    }
+  }, [scanId])
 
   const { data, isLoading } = useQuery({
     queryKey: ['subdomains', jobId, pagination, sorting, filterAlive],

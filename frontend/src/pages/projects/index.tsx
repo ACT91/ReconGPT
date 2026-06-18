@@ -50,7 +50,7 @@ function ProjectCard({
           <div>
             <h3
               className="font-medium text-zinc-100 cursor-pointer hover:text-sidebar-active transition-colors"
-              onClick={() => navigate(`/projects?tab=active`)}
+              onClick={() => navigate(`/projects/${project.id}`)}
             >
               {project.name}
             </h3>

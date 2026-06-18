@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { resultApi, scanApi, getApiError } from '@/services/api'
@@ -261,6 +261,14 @@ export function ReportsPage() {
   const { scanId } = useParams<{ scanId: string }>()
   const [jobId, setJobId] = useState(scanId || '')
   const [inputJobId, setInputJobId] = useState(scanId || '')
+
+  // Auto-load when scanId is in URL
+  useEffect(() => {
+    if (scanId && scanId !== jobId) {
+      setJobId(scanId)
+      setInputJobId(scanId)
+    }
+  }, [scanId])
 
   return (
     <div>

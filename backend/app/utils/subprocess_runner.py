@@ -23,7 +23,6 @@ async def run_command_async(
             stderr=asyncio.subprocess.PIPE,
             cwd=str(cwd) if cwd else None,
             env=env,
-            limit=1024 * 1024,
         )
         
         try:

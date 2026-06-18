@@ -1,4 +1,5 @@
 export { ProjectsPage } from './projects/index'
+export { ProjectDetailPage } from './projects/detail'
 export { ScansPage } from './scans/index'
 export { AssetsPage } from './assets/index'
 export { EndpointsPage } from './endpoints/index'

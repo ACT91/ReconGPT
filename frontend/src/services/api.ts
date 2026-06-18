@@ -1,4 +1,8 @@
-import axios, { AxiosError } from 'axios'
+import axios, { AxiosError, type AxiosRequestConfig } from 'axios'
+
+interface RetryConfig extends AxiosRequestConfig {
+  _isRetry?: boolean
+}
 import type {
   AuthTokens,
   LoginRequest,
@@ -23,6 +27,7 @@ import type {
   ScanLogsResponse,
   AiInsight,
   ApiError,
+  DashboardData,
 } from '@/types'
 
 const api = axios.create({
@@ -45,24 +50,27 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError<ApiError>) => {
-    if (error.response?.status === 401 && !error.config?.url?.includes('/auth/')) {
+    const config = error.config as RetryConfig | undefined
+    if (config?._isRetry) return Promise.reject(error)
+    if (error.response?.status === 401 && !config?.url?.includes('/auth/')) {
       const refreshToken = localStorage.getItem('refresh_token')
-      if (refreshToken) {
-        try {
-          const { data } = await axios.post<AuthTokens>('/api/v1/auth/refresh', {
-            refresh_token: refreshToken,
-          })
-          localStorage.setItem('access_token', data.access_token)
-          localStorage.setItem('refresh_token', data.refresh_token)
-          if (error.config) {
-            error.config.headers.Authorization = `Bearer ${data.access_token}`
-            return api(error.config)
-          }
-        } catch {
-          localStorage.clear()
-          window.location.href = '/login'
-        }
-      } else {
+      if (!refreshToken) {
+        localStorage.clear()
+        window.location.href = '/login'
+        return Promise.reject(error)
+      }
+      try {
+        const { data } = await axios.post<AuthTokens>('/api/v1/auth/refresh', {
+          refresh_token: refreshToken,
+        })
+        localStorage.setItem('access_token', data.access_token)
+        localStorage.setItem('refresh_token', data.refresh_token)
+        if (!config) return Promise.reject(error)
+        config._isRetry = true
+        config.headers = config.headers || {}
+        config.headers.Authorization = `Bearer ${data.access_token}`
+        return api.request(config)
+      } catch {
         localStorage.clear()
         window.location.href = '/login'
       }
@@ -184,6 +192,11 @@ export const resultApi = {
 
   getEndpoints: (id: string) =>
     api.get<PaginatedResponse<Endpoint>>(`/results/${id}/endpoints`).then((r) => r.data),
+}
+
+export const dashboardApi = {
+  get: () =>
+    api.get<DashboardData>('/dashboard/').then((r) => r.data),
 }
 
 export const insightApi = {

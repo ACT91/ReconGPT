@@ -1,189 +1,304 @@
-import { Shield, Globe, AlertTriangle, ArrowRight, ScanLine } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
-import { AttackSurfaceGraph } from '@/graphs/AttackSurfaceGraph'
+import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
+import {
+  ScanLine,
+  Globe,
+  Shield,
+  ArrowRight,
+  Activity,
+  Bug,
+} from 'lucide-react'
+import { dashboardApi } from '@/services/api'
+import type { DashboardData } from '@/types'
 
-const mockScanData = {
-  domain: 'example.com',
-  subdomains: ['api.example.com', 'admin.example.com', 'cdn.example.com', 'dev.example.com', 'staging.example.com'],
-  liveHosts: ['api.example.com', 'cdn.example.com', 'dev.example.com'],
-  technologies: {
-    'api.example.com': ['nginx', 'node.js'],
-    'admin.example.com': ['apache', 'php'],
-  },
-  jsFiles: ['app.js', 'vendor.js', 'config.js', 'api-client.js'],
-  endpoints: ['/api/v1/users', '/api/v1/auth', '/admin/login', '/api/v1/settings'],
-  vulnerabilities: [
-    { endpoint: '/admin/login', severity: 'high' },
-    { endpoint: '/api/v1/users', severity: 'medium' },
-  ],
-}
-
-function StatCard({ icon: Icon, label, value, trend }: { icon: React.ElementType; label: string; value: string; trend?: string }) {
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  trend,
+  active,
+}: {
+  icon: React.ElementType
+  label: string
+  value: string | number
+  trend?: string
+  active?: boolean
+}) {
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
-        <div className="h-8 w-8 rounded-lg bg-primary/5 flex items-center justify-center">
-          <Icon className="h-4 w-4 text-primary" />
+    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 hover:bg-zinc-900/80 transition-colors">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{label}</span>
+        <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${active ? 'bg-sidebar-active/10' : 'bg-zinc-800/50'}`}>
+          <Icon className={`h-4 w-4 ${active ? 'text-sidebar-active' : 'text-zinc-400'}`} />
         </div>
-      </CardHeader>
-      <CardContent>
-        <div className="text-3xl font-bold">{value}</div>
-        {trend && (
-          <p className="text-xs text-muted-foreground mt-1">{trend}</p>
-        )}
-      </CardContent>
-    </Card>
+      </div>
+      <div className="text-2xl font-bold text-zinc-100">{value}</div>
+      {trend && <p className="text-xs text-zinc-500 mt-1">{trend}</p>}
+    </div>
   )
 }
 
-function SeverityBadge({ severity }: { severity: string }) {
-  const map: Record<string, { variant: 'destructive' | 'warning' | 'info' | 'secondary'; label: string }> = {
-    critical: { variant: 'destructive', label: 'Critical' },
-    high: { variant: 'warning', label: 'High' },
-    medium: { variant: 'info', label: 'Medium' },
-    low: { variant: 'secondary', label: 'Low' },
+function SeverityDot({ severity }: { severity: string }) {
+  const colors: Record<string, string> = {
+    critical: 'bg-red-500',
+    high: 'bg-orange-500',
+    medium: 'bg-yellow-500',
+    low: 'bg-blue-500',
+    info: 'bg-zinc-500',
   }
-  const { variant, label } = map[severity] || { variant: 'secondary' as const, label: severity }
-  return <Badge variant={variant}>{label}</Badge>
+  return <span className={`inline-block h-2 w-2 rounded-full ${colors[severity] || 'bg-zinc-500'}`} />
 }
 
-const recentFindings = [
-  { title: 'XSS Vulnerability', severity: 'high', endpoint: '/api/search', time: '2m ago' },
-  { title: 'Open Redirect', severity: 'medium', endpoint: '/login', time: '15m ago' },
-  { title: 'Info Disclosure', severity: 'low', endpoint: '/debug', time: '1h ago' },
-  { title: 'SQL Injection', severity: 'critical', endpoint: '/api/users', time: '3h ago' },
-]
+function SeverityBadge({ severity }: { severity: string }) {
+  const styles: Record<string, string> = {
+    critical: 'bg-red-900/30 text-red-300 border-red-800/50',
+    high: 'bg-orange-900/30 text-orange-300 border-orange-800/50',
+    medium: 'bg-yellow-900/30 text-yellow-300 border-yellow-800/50',
+    low: 'bg-blue-900/30 text-blue-300 border-blue-800/50',
+    info: 'bg-zinc-800 text-zinc-400 border-zinc-700',
+  }
+  return (
+    <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded border ${styles[severity] || styles.info}`}>
+      {severity}
+    </span>
+  )
+}
 
-const riskData = [
-  { label: 'Critical', count: 2, pct: 15, color: 'bg-destructive' },
-  { label: 'High', count: 12, pct: 45, color: 'bg-orange-500' },
-  { label: 'Medium', count: 28, pct: 60, color: 'bg-amber-500' },
-  { label: 'Low', count: 205, pct: 90, color: 'bg-primary/40' },
-]
+function timeAgo(dateStr: string | null): string {
+  if (!dateStr) return ''
+  const ms = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(ms / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  return `${days}d ago`
+}
+
+function RiskBar({ label, count, max }: { label: string; count: number; max: number }) {
+  const colors: Record<string, string> = {
+    critical: 'bg-red-500',
+    high: 'bg-orange-500',
+    medium: 'bg-yellow-500',
+    low: 'bg-blue-500',
+    info: 'bg-zinc-500',
+  }
+  const pct = max > 0 ? (count / max) * 100 : 0
+  return (
+    <div>
+      <div className="flex justify-between text-xs mb-1">
+        <div className="flex items-center gap-2">
+          <SeverityDot severity={label} />
+          <span className="text-zinc-300 capitalize">{label}</span>
+        </div>
+        <span className="text-zinc-400">{count}</span>
+      </div>
+      <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+        <div className={`h-full ${colors[label]} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  )
+}
+
+function ProgressBar({ value, color }: { value: number; color?: string }) {
+  return (
+    <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+      <div
+        className={`h-full rounded-full transition-all ${color || 'bg-sidebar-active'}`}
+        style={{ width: `${Math.min(value, 100)}%` }}
+      />
+    </div>
+  )
+}
 
 export function Dashboard() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: () => dashboardApi.get(),
+    refetchInterval: 30_000,
+  })
+
+  if (isLoading) {
+    return (
+      <div className="space-y-8 pb-8">
+        <div>
+          <div className="h-8 w-48 bg-zinc-800 rounded-lg animate-pulse mb-2" />
+          <div className="h-4 w-72 bg-zinc-800/50 rounded animate-pulse" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+              <div className="h-8 w-24 bg-zinc-800 rounded animate-pulse mb-3" />
+              <div className="h-7 w-16 bg-zinc-800 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  const d = data as DashboardData | undefined
+  const activeCount = (d?.scans.running || 0) + (d?.scans.queued || 0)
+  const severities = ['critical', 'high', 'medium', 'low', 'info']
+  const maxSeverity = Math.max(
+    ...severities.map((s) => d?.vulnerabilities.by_severity[s] || 0),
+    1,
+  )
+
   return (
     <div className="space-y-8 pb-8">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Your attack surface overview at a glance</p>
+      <div>
+        <h1 className="text-3xl font-light text-white">Dashboard</h1>
+        <p className="text-zinc-400 text-sm mt-1">Your attack surface overview at a glance</p>
       </div>
 
+      {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={ScanLine} label="Active Scans" value="3" trend="2 running, 1 queued" />
-        <StatCard icon={AlertTriangle} label="Total Findings" value="247" trend="+18 in last 24h" />
-        <StatCard icon={Globe} label="Endpoints" value="1,432" trend="Across 5 targets" />
-        <StatCard icon={Shield} label="Vulnerabilities" value="42" trend="12 high, 2 critical" />
+        <StatCard
+          icon={Activity}
+          label="Active Scans"
+          value={activeCount}
+          trend={`${d?.scans.running || 0} running, ${d?.scans.queued || 0} queued`}
+          active
+        />
+        <StatCard
+          icon={Bug}
+          label="Total Findings"
+          value={d?.vulnerabilities.total || 0}
+          trend={`${d?.scans.completed || 0} completed scans`}
+        />
+        <StatCard
+          icon={Globe}
+          label="Endpoints"
+          value={(d?.assets.total_endpoints || 0).toLocaleString()}
+          trend={`${d?.assets.total_subdomains || 0} subdomains`}
+        />
+        <StatCard
+          icon={Shield}
+          label="Vulnerabilities"
+          value={(d?.vulnerabilities.total || 0).toLocaleString()}
+          trend={`${d?.vulnerabilities.by_severity.high || 0} high, ${d?.vulnerabilities.by_severity.critical || 0} critical`}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between">
+        {/* Recent Findings */}
+        <div className="lg:col-span-2 bg-zinc-900/50 border border-zinc-800 rounded-xl overflow-hidden">
+          <div className="p-5 border-b border-zinc-800 flex items-center justify-between">
             <div>
-              <CardTitle>Recent Findings</CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">Last 24 hours</p>
+              <h2 className="text-base font-semibold text-zinc-100">Recent Findings</h2>
+              <p className="text-xs text-zinc-500 mt-0.5">Latest discovered vulnerabilities</p>
             </div>
-            <Badge variant="default" className="text-xs">18 new</Badge>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-1">
-              {recentFindings.map((f, i) => (
+          </div>
+          <div>
+            {!d?.recent_findings || d.recent_findings.length === 0 ? (
+              <div className="p-10 text-center">
+                <Shield className="h-8 w-8 text-zinc-700 mx-auto mb-2" />
+                <p className="text-sm text-zinc-500">No findings yet. Start a scan to discover vulnerabilities.</p>
+              </div>
+            ) : (
+              d.recent_findings.map((f) => (
                 <div
-                  key={i}
-                  className="flex items-center gap-4 rounded-lg p-3 hover:bg-muted/50 transition-colors cursor-pointer group"
+                  key={f.id}
+                  className="flex items-center gap-4 px-5 py-3 hover:bg-zinc-800/30 transition-colors border-b border-zinc-800/50 last:border-0"
                 >
-                  <div className="h-9 w-9 rounded-lg bg-primary/5 flex items-center justify-center shrink-0 group-hover:bg-primary/10 transition-colors">
-                    <Shield className="h-4 w-4 text-primary" />
+                  <div className="h-8 w-8 rounded-lg bg-zinc-800/50 flex items-center justify-center shrink-0">
+                    <Bug className="h-4 w-4 text-zinc-400" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{f.title}</p>
-                    <p className="text-xs text-muted-foreground truncate">{f.endpoint}</p>
+                    <p className="text-sm font-medium text-zinc-200 truncate">{f.name}</p>
+                    <p className="text-xs text-zinc-500 truncate">{f.url}</p>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     <SeverityBadge severity={f.severity} />
-                    <span className="text-xs text-muted-foreground">{f.time}</span>
+                    <span className="text-xs text-zinc-500">{timeAgo(f.discovered_at)}</span>
                   </div>
                 </div>
-              ))}
-            </div>
-            <div className="mt-4 pt-4 border-t flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Showing 4 of 18 findings</span>
-              <button className="text-xs text-primary font-medium hover:underline inline-flex items-center gap-1">
-                View all <ArrowRight className="h-3 w-3" />
-              </button>
-            </div>
-          </CardContent>
-        </Card>
+              ))
+            )}
+            {(d?.recent_findings?.length || 0) > 0 && (
+              <div className="px-5 py-3 border-t border-zinc-800 flex items-center justify-between">
+                <span className="text-xs text-zinc-500">
+                  Showing {d?.recent_findings.length} findings
+                </span>
+                <Link
+                  to="/findings"
+                  className="text-xs text-sidebar-active font-medium hover:underline inline-flex items-center gap-1"
+                >
+                  View all <ArrowRight className="h-3 w-3" />
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
 
         <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Risk Overview</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              {riskData.map((item) => (
-                <div key={item.label}>
-                  <div className="flex justify-between items-center mb-1.5">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">{item.label}</span>
-                    </div>
-                    <span className="text-sm text-muted-foreground">{item.count}</span>
-                  </div>
-                  <Progress value={item.pct} className="h-2" />
-                </div>
+          {/* Risk Overview */}
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+            <h2 className="text-base font-semibold text-zinc-100 mb-4">Risk Overview</h2>
+            <div className="space-y-3">
+              {severities.map((sev) => (
+                <RiskBar
+                  key={sev}
+                  label={sev}
+                  count={d?.vulnerabilities.by_severity[sev] || 0}
+                  max={maxSeverity}
+                />
               ))}
-              <div className="pt-2 border-t">
+            </div>
+            {d && (
+              <div className="mt-4 pt-4 border-t border-zinc-800">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Total</span>
-                  <span className="font-medium">247 findings</span>
+                  <span className="text-zinc-400">Total</span>
+                  <span className="font-medium text-zinc-200">{d.vulnerabilities.total} findings</span>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            )}
+          </div>
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Active Scans</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <div className="flex justify-between text-sm mb-1.5">
-                  <span className="font-medium">example.com</span>
-                  <span className="text-muted-foreground">62%</span>
-                </div>
-                <Progress value={62} className="h-2 [&>div]:bg-yellow-500" />
-                <p className="text-xs text-muted-foreground mt-1">Stage 8/13 — Endpoint Extraction</p>
+          {/* Active Scans */}
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+            <h2 className="text-base font-semibold text-zinc-100 mb-4">Active Scans</h2>
+            {!d?.active_scans || d.active_scans.length === 0 ? (
+              <div className="py-6 text-center">
+                <ScanLine className="h-6 w-6 text-zinc-700 mx-auto mb-2" />
+                <p className="text-xs text-zinc-500">No active scans</p>
               </div>
-              <div>
-                <div className="flex justify-between text-sm mb-1.5">
-                  <span className="font-medium">testsite.io</span>
-                  <span className="text-muted-foreground">23%</span>
-                </div>
-                <Progress value={23} className="h-2" />
-                <p className="text-xs text-muted-foreground mt-1">Stage 3/13 — Tech Detection</p>
+            ) : (
+              <div className="space-y-4">
+                {d.active_scans.map((s) => (
+                  <div key={s.id}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <Link
+                        to={`/scans/${s.id}`}
+                        className="font-medium text-zinc-200 hover:text-sidebar-active transition-colors truncate"
+                      >
+                        {s.target_domain}
+                      </Link>
+                      <span className="text-zinc-500 text-xs">{Math.round(s.progress_percent)}%</span>
+                    </div>
+                    <ProgressBar value={s.progress_percent} color={s.progress_percent < 50 ? 'bg-yellow-500' : undefined} />
+                    {s.current_stage && (
+                      <p className="text-xs text-zinc-500 mt-1">{s.current_stage}</p>
+                    )}
+                  </div>
+                ))}
               </div>
-              <div className="pt-2 border-t">
-                <button className="text-xs text-primary font-medium hover:underline inline-flex items-center gap-1">
+            )}
+            {(d?.scans.running || 0) > 0 && (
+              <div className="mt-4 pt-4 border-t border-zinc-800">
+                <Link
+                  to="/scans"
+                  className="text-xs text-sidebar-active font-medium hover:underline inline-flex items-center gap-1"
+                >
                   View all scans <ArrowRight className="h-3 w-3" />
-                </button>
+                </Link>
               </div>
-            </CardContent>
-          </Card>
+            )}
+          </div>
         </div>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Attack Surface Map</CardTitle>
-          <p className="text-sm text-muted-foreground">Visual representation of your attack surface</p>
-        </CardHeader>
-        <CardContent>
-          <AttackSurfaceGraph scanId="demo-scan" data={mockScanData} />
-        </CardContent>
-      </Card>
     </div>
   )
 }

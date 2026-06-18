@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   useReactTable,
@@ -66,6 +66,14 @@ export function EndpointsPage() {
   const [sourceFilter, setSourceFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 50 })
+
+  // Auto-load when scanId is in URL
+  useEffect(() => {
+    if (scanId && scanId !== jobId) {
+      setJobId(scanId)
+      setInputJobId(scanId)
+    }
+  }, [scanId])
 
   const { data: fullResults, isLoading, error } = useQuery({
     queryKey: ['scan-full-results', jobId],

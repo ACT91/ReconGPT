@@ -41,7 +41,7 @@ async def run_nuclei(
         with open(output_file, encoding="utf-8", errors="ignore") as f:
             vulnerabilities_count = sum(1 for _ in f)
     
-    if not result["success"] and result["returncode"] != 0:
+    if result["returncode"] < 0:
         return {"success": False, "error": result["stderr"][:1000], "vulnerabilities_count": vulnerabilities_count}
     
     return {"success": True, "vulnerabilities_count": vulnerabilities_count}

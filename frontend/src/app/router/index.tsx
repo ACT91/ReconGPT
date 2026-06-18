@@ -5,6 +5,7 @@ import { ErrorBoundary } from '@/components/common'
 import { Dashboard } from '@/pages/dashboard'
 import {
   ProjectsPage,
+  ProjectDetailPage,
   ScansPage,
   AssetsPage,
   EndpointsPage,
@@ -54,6 +55,7 @@ export function AppRouter() {
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/projects" element={<ProjectsPage />} />
+        <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
         <Route path="/scans" element={<ScansPage />} />
         <Route path="/scans/:scanId" element={<ScansPage />} />
         <Route path="/assets" element={<AssetsPage />} />
