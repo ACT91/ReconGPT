@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Eye, EyeOff, LogIn } from 'lucide-react'
+import { Eye, EyeSlash, SignIn } from '@phosphor-icons/react'
 import { useLogin } from '@/hooks/useAuth'
 import { getApiError } from '@/services/api'
 import { Button } from '@/components/ui/button'
@@ -80,7 +80,7 @@ export function LoginPage() {
                     tabIndex={-1}
                   >
                     {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
+                      <EyeSlash className="h-4 w-4" />
                     ) : (
                       <Eye className="h-4 w-4" />
                     )}
@@ -113,7 +113,7 @@ export function LoginPage() {
                   </span>
                 ) : (
                   <span className="flex items-center gap-2">
-                    <LogIn className="h-4 w-4" />
+                    <SignIn className="h-4 w-4" />
                     Sign In
                   </span>
                 )}

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Eye, EyeOff, UserPlus } from 'lucide-react'
+import { Eye, EyeSlash, UserPlus } from '@phosphor-icons/react'
 import { useRegister } from '@/hooks/useAuth'
 import { getApiError } from '@/services/api'
 import { Button } from '@/components/ui/button'
@@ -103,7 +103,7 @@ export function RegisterPage() {
                     tabIndex={-1}
                   >
                     {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
+                      <EyeSlash className="h-4 w-4" />
                     ) : (
                       <Eye className="h-4 w-4" />
                     )}
@@ -133,7 +133,7 @@ export function RegisterPage() {
                     tabIndex={-1}
                   >
                     {showConfirm ? (
-                      <EyeOff className="h-4 w-4" />
+                      <EyeSlash className="h-4 w-4" />
                     ) : (
                       <Eye className="h-4 w-4" />
                     )}

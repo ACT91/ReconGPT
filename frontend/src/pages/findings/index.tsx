@@ -15,7 +15,7 @@ import { scanApi, getApiError } from '@/services/api'
 import { SeverityBadge, SkeletonTable, ErrorBoundary } from '@/components/common'
 import { Button } from '@/components/ui/button'
 import type { Vulnerability } from '@/types'
-import { Flag, FlagOff, AlertTriangle, Search, X } from 'lucide-react'
+import { Flag, ProhibitInset, WarningCircle, MagnifyingGlass, X } from '@phosphor-icons/react'
 import toast from 'react-hot-toast'
 
 const columnHelper = createColumnHelper<Vulnerability>()
@@ -82,7 +82,7 @@ function VulnDetailPanel({ vuln, onClose, onToggleFP }: { vuln: Vulnerability; o
               variant="outline"
               className={`gap-2 ${vuln.is_false_positive ? 'border-amber-700 text-neutral-300 hover:text-neutral-300' : 'border-neutral-700 text-neutral-300 hover:text-neutral-100'}`}
             >
-              {vuln.is_false_positive ? <FlagOff className="h-4 w-4" /> : <Flag className="h-4 w-4" />}
+              {vuln.is_false_positive ? <ProhibitInset className="h-4 w-4" /> : <Flag className="h-4 w-4" />}
               {vuln.is_false_positive ? 'Unmark False Positive' : 'Mark False Positive'}
             </Button>
           </div>
@@ -152,7 +152,7 @@ export function FindingsPage() {
         cell: (info) => (
           <div className="flex items-center gap-2">
             {info.row.original.is_false_positive && (
-              <FlagOff className="h-3.5 w-3.5 text-neutral-300 shrink-0" />
+              <ProhibitInset className="h-3.5 w-3.5 text-neutral-300 shrink-0" />
             )}
             <span className={`font-medium ${info.row.original.is_false_positive ? 'text-neutral-500 line-through' : 'text-neutral-100'}`}>
               {info.getValue()}
@@ -249,7 +249,7 @@ export function FindingsPage() {
       <div className="flex flex-col sm:flex-row gap-2 mb-4">
         <div className="flex gap-2 flex-1">
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
+            <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
             <input
               type="text"
               value={inputJobId}
@@ -269,7 +269,7 @@ export function FindingsPage() {
 
       {!jobId ? (
         <div className="text-center py-20">
-          <AlertTriangle className="h-12 w-12 text-neutral-700 mx-auto mb-4" />
+          <WarningCircle className="h-12 w-12 text-neutral-700 mx-auto mb-4" />
           <p className="text-lg text-neutral-400">Enter a scan job ID</p>
           <p className="text-sm text-neutral-600 mt-1">Load findings from a completed scan</p>
         </div>

@@ -1,13 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
-  ScanLine,
+  Scan,
   Globe,
   Shield,
   ArrowRight,
-  Activity,
+  Pulse,
   Bug,
-} from 'lucide-react'
+} from '@phosphor-icons/react'
 import { dashboardApi } from '@/services/api'
 import type { DashboardData } from '@/types'
 
@@ -156,7 +156,7 @@ export function Dashboard() {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          icon={Activity}
+          icon={Pulse}
           label="Active Scans"
           value={activeCount}
           trend={`${d?.scans.running || 0} running, ${d?.scans.queued || 0} queued`}
@@ -262,7 +262,7 @@ export function Dashboard() {
             <h2 className="text-base font-semibold text-neutral-100 mb-4">Active Scans</h2>
             {!d?.active_scans || d.active_scans.length === 0 ? (
               <div className="py-6 text-center">
-                <ScanLine className="h-6 w-6 text-neutral-700 mx-auto mb-2" />
+                <Scan className="h-6 w-6 text-neutral-700 mx-auto mb-2" />
                 <p className="text-xs text-neutral-500">No active scans</p>
               </div>
             ) : (

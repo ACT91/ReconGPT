@@ -1,22 +1,22 @@
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { Suspense, useState } from 'react'
 import {
-  LayoutDashboard,
+  Layout,
   Briefcase,
-  ScanLine,
+  Scan,
   Globe,
   Network,
-  AlertTriangle,
-  Bot,
+  WarningCircle,
+  Robot,
   FileText,
-  Settings,
-  ChevronDown,
-  ChevronRight,
-  HelpCircle,
-  LogOut,
+  Gear,
+  CaretDown,
+  CaretRight,
+  Question,
+  SignOut,
   Moon,
   Sun,
-} from 'lucide-react'
+} from '@phosphor-icons/react'
 import { SidebarSection } from './SidebarSection'
 import { useLogout } from '@/hooks/useAuth'
 
@@ -50,7 +50,7 @@ function SidebarNavContent({ isCollapsed }: SidebarNavProps) {
     {
       href: '/dashboard',
       label: 'Dashboard',
-      icon: LayoutDashboard,
+      icon: Layout,
     },
     {
       href: '/projects',
@@ -64,7 +64,7 @@ function SidebarNavContent({ isCollapsed }: SidebarNavProps) {
     {
       href: '/scans',
       label: 'Scans',
-      icon: ScanLine,
+      icon: Scan,
       subItems: [
         { href: '/scans', label: 'All Scans' },
         { href: '/scans?tab=history', label: 'History' },
@@ -83,12 +83,12 @@ function SidebarNavContent({ isCollapsed }: SidebarNavProps) {
     {
       href: '/findings',
       label: 'Findings',
-      icon: AlertTriangle,
+      icon: WarningCircle,
     },
     {
       href: '/ai-analysis',
       label: 'AI Analysis',
-      icon: Bot,
+      icon: Robot,
     },
     {
       href: '/reports',
@@ -97,8 +97,8 @@ function SidebarNavContent({ isCollapsed }: SidebarNavProps) {
     },
     {
       href: '/settings',
-      label: 'Settings',
-      icon: Settings,
+      label: 'Gear',
+      icon: Gear,
     },
   ]
 
@@ -173,9 +173,9 @@ function SidebarNavContent({ isCollapsed }: SidebarNavProps) {
                         aria-label={isExpanded ? 'Collapse' : 'Expand'}
                       >
                         {isExpanded ? (
-                          <ChevronDown className="h-3.5 w-3.5" />
+                          <CaretDown className="h-3.5 w-3.5" />
                         ) : (
-                          <ChevronRight className="h-3.5 w-3.5" />
+                          <CaretRight className="h-3.5 w-3.5" />
                         )}
                       </button>
                     )}
@@ -218,14 +218,14 @@ function SidebarNavContent({ isCollapsed }: SidebarNavProps) {
             to="/settings"
             className="flex items-center gap-2 px-3 py-2.5 text-neutral-400 hover:text-neutral-200 rounded-lg transition-colors text-[13px]"
           >
-            <HelpCircle className="h-[18px] w-[18px] text-neutral-500" />
+            <Question className="h-[18px] w-[18px] text-neutral-500" />
             <span className="font-medium">Help & Information</span>
           </Link>
           <button
             onClick={logout}
             className="flex items-center gap-2 w-full px-3 py-2.5 text-neutral-400 hover:text-neutral-200 rounded-lg transition-colors text-[13px]"
           >
-            <LogOut className="h-[18px] w-[18px] text-neutral-500" />
+            <SignOut className="h-[18px] w-[18px] text-neutral-500" />
             <span className="font-medium">Log out</span>
           </button>
         </div>
@@ -244,14 +244,14 @@ function SidebarNavContent({ isCollapsed }: SidebarNavProps) {
             className="p-2.5 text-neutral-500 hover:text-neutral-200 rounded-lg transition-colors"
             aria-label="Help"
           >
-            <HelpCircle className="h-[18px] w-[18px]" />
+            <Question className="h-[18px] w-[18px]" />
           </Link>
           <button
             onClick={logout}
             className="p-2.5 text-neutral-500 hover:text-neutral-200 rounded-lg transition-colors"
             aria-label="Log out"
           >
-            <LogOut className="h-[18px] w-[18px]" />
+            <SignOut className="h-[18px] w-[18px]" />
           </button>
         </div>
       )}

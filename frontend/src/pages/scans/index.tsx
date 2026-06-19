@@ -15,7 +15,7 @@ import { scanApi, getApiError } from '@/services/api'
 import { useScanWebSocket } from '@/hooks/useScanWebSocket'
 import { ScanProgressBar, StatusBadge, LiveLogsViewer, SkeletonTable, ErrorBoundary } from '@/components/common'
 import type { ScanJob, ScanProgress, ScanLogEntry } from '@/types'
-import { Globe, Network, AlertTriangle, Bot, FileText } from 'lucide-react'
+import { Globe, Network, WarningCircle, Robot, FileText } from '@phosphor-icons/react'
 
 const columnHelper = createColumnHelper<ScanJob>()
 
@@ -160,10 +160,10 @@ function ScanDetailPanel({ job, onClose }: { job: ScanJob; onClose: () => void }
             <Network className="h-3.5 w-3.5" /> Endpoints
           </Link>
           <Link to={`/findings/${job.id}`} className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-primary transition-colors">
-            <AlertTriangle className="h-3.5 w-3.5" /> Findings
+            <WarningCircle className="h-3.5 w-3.5" /> Findings
           </Link>
           <Link to={`/ai-analysis/${job.id}`} className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-primary transition-colors">
-            <Bot className="h-3.5 w-3.5" /> AI Analysis
+            <Robot className="h-3.5 w-3.5" /> AI Analysis
           </Link>
           <Link to={`/reports/${job.id}`} className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-primary transition-colors">
             <FileText className="h-3.5 w-3.5" /> Reports

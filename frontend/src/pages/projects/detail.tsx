@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { projectApi, scanApi, getApiError } from '@/services/api'
 import { ErrorBoundary, StatusBadge, ScanProgressBar } from '@/components/common'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Globe, Network, AlertTriangle, Target, Play } from 'lucide-react'
+import { ArrowLeft, Globe, Network, WarningCircle, Crosshair, Play } from '@phosphor-icons/react'
 import toast from 'react-hot-toast'
 import type { ScanJob } from '@/types'
 
@@ -186,7 +186,7 @@ export function ProjectDetailPage() {
               key={domain}
               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-neutral-800 text-neutral-400"
             >
-              <Target className="h-3 w-3" />
+              <Crosshair className="h-3 w-3" />
               {domain}
             </span>
           ))}
@@ -220,7 +220,7 @@ export function ProjectDetailPage() {
           <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-4">
             <p className="text-2xl font-semibold text-neutral-100">{stats.total_vulnerabilities}</p>
             <p className="text-xs text-neutral-500 mt-1">
-              <AlertTriangle className="h-3 w-3 inline mr-1" />
+              <WarningCircle className="h-3 w-3 inline mr-1" />
               Vulnerabilities
             </p>
             <div className="flex gap-1.5 mt-2 flex-wrap">

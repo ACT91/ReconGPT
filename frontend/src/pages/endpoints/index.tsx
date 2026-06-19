@@ -15,7 +15,7 @@ import { resultApi, getApiError } from '@/services/api'
 import { ErrorBoundary, SkeletonTable } from '@/components/common'
 import { Button } from '@/components/ui/button'
 import type { Endpoint } from '@/types'
-import { Globe, Filter, Download, Search } from 'lucide-react'
+import { Globe, Funnel, Download, MagnifyingGlass } from '@phosphor-icons/react'
 import toast from 'react-hot-toast'
 
 const columnHelper = createColumnHelper<Endpoint>()
@@ -249,7 +249,7 @@ export function EndpointsPage() {
       <div className="flex flex-col sm:flex-row gap-2 mb-4">
         <div className="flex gap-2 flex-1">
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
+            <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
             <input
               type="text"
               value={inputJobId}
@@ -287,7 +287,7 @@ export function EndpointsPage() {
           ) : (
             <>
               <div className="flex items-center gap-2 mb-4">
-                <Filter className="h-4 w-4 text-neutral-500" />
+                <Funnel className="h-4 w-4 text-neutral-500" />
                 <SourceFilter value={sourceFilter} onChange={setSourceFilter} />
                 <div className="flex-1" />
                 <input

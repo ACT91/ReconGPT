@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Plus, Trash2, Edit3, FolderKanban, Target } from 'lucide-react'
+import { Plus, Trash, Pencil, Folder, Crosshair } from '@phosphor-icons/react'
 import toast from 'react-hot-toast'
 import type { Project, ProjectCreate, ScanJob } from '@/types'
 import { useNavigate } from 'react-router-dom'
@@ -45,7 +45,7 @@ function ProjectCard({
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
-            <FolderKanban className="h-4.5 w-4.5 text-primary" />
+            <Folder className="h-4.5 w-4.5 text-primary" />
           </div>
           <div>
             <h3
@@ -65,14 +65,14 @@ function ProjectCard({
             className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800 transition-colors"
             title="Edit"
           >
-            <Edit3 className="h-3.5 w-3.5" />
+            <Pencil className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={() => onDelete(project.id)}
             className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800/50 transition-colors"
             title="Delete"
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <Trash className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
@@ -84,7 +84,7 @@ function ProjectCard({
               key={domain}
               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-neutral-800 text-neutral-400"
             >
-              <Target className="h-3 w-3" />
+              <Crosshair className="h-3 w-3" />
               {domain}
             </span>
           ))}
@@ -296,7 +296,7 @@ export function ProjectsPage() {
           <SkeletonCardGrid count={6} />
         ) : projects.length === 0 ? (
           <div className="text-center py-20">
-            <FolderKanban className="h-12 w-12 text-neutral-700 mx-auto mb-4" />
+            <Folder className="h-12 w-12 text-neutral-700 mx-auto mb-4" />
             <p className="text-lg text-neutral-400">No projects yet</p>
             <p className="text-sm text-neutral-600 mt-1">Create your first project to start organizing scans</p>
             <Button

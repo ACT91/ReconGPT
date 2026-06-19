@@ -13,7 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Key, Plus, Trash2, Copy, Check, Eye, EyeOff, User, Lock, KeyRound } from 'lucide-react'
+import { Key, Plus, Trash, Copy, Check, Eye, EyeSlash, User, Lock } from '@phosphor-icons/react'
 import toast from 'react-hot-toast'
 import type { APIKeyFull } from '@/types'
 
@@ -123,7 +123,7 @@ function ChangePasswordSection() {
                 onClick={() => setShowCurrent(!showCurrent)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300"
               >
-                {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {showCurrent ? <EyeSlash className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
           </div>
@@ -143,7 +143,7 @@ function ChangePasswordSection() {
                 onClick={() => setShowNew(!showNew)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300"
               >
-                {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {showNew ? <EyeSlash className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
           </div>
@@ -194,7 +194,7 @@ function ApiKeyItem({
         className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800/50 transition-colors"
         title="Revoke key"
       >
-        <Trash2 className="h-4 w-4" />
+        <Trash className="h-4 w-4" />
       </button>
     </div>
   )
@@ -358,7 +358,7 @@ export function SettingsPage() {
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'password', label: 'Change Password', icon: Lock },
-    { id: 'api-keys', label: 'API Keys', icon: KeyRound },
+    { id: 'api-keys', label: 'API Keys', icon: Key },
   ]
   const [activeTab, setActiveTab] = useState('profile')
 

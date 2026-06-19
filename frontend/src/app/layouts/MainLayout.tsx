@@ -2,7 +2,7 @@ import { Outlet } from 'react-router-dom'
 import { useState } from 'react'
 import { ErrorBoundary } from '@/components/common'
 import { SidebarNav } from '@/components/layouts/SidebarNav'
-import { Menu, X } from 'lucide-react'
+import { List, X } from '@phosphor-icons/react'
 
 export function MainLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -24,7 +24,7 @@ export function MainLayout() {
         className="fixed top-4 left-4 z-50 lg:hidden p-2 rounded-lg bg-sidebar-bg border border-neutral-800 text-neutral-400 hover:text-neutral-200"
         aria-label="Toggle sidebar"
       >
-        {mobileSidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        {mobileSidebarOpen ? <X className="h-5 w-5" /> : <List className="h-5 w-5" />}
       </button>
 
       {/* Sidebar */}
@@ -51,7 +51,7 @@ export function MainLayout() {
               className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-300 transition-colors"
               aria-label="Collapse sidebar"
             >
-              <Menu className="h-4 w-4" />
+              <List className="h-4 w-4" />
             </button>
           )}
           {sidebarCollapsed && (
@@ -60,7 +60,7 @@ export function MainLayout() {
               className="absolute -right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg bg-sidebar-bg border border-neutral-800 text-neutral-500 hover:text-neutral-300 transition-colors"
               aria-label="Expand sidebar"
             >
-              <Menu className="h-3 w-3" />
+              <List className="h-3 w-3" />
             </button>
           )}
         </div>

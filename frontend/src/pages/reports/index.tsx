@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { resultApi, scanApi, getApiError } from '@/services/api'
 import { ErrorBoundary, Skeleton, StatusBadge } from '@/components/common'
 import { Button } from '@/components/ui/button'
-import { FileText, Download, FileJson, FileSpreadsheet, Search } from 'lucide-react'
+import { FileText, Download, FileCode, FileXls, MagnifyingGlass } from '@phosphor-icons/react'
 import toast from 'react-hot-toast'
 
 function ReportPreview({ jobId }: { jobId: string }) {
@@ -110,7 +110,7 @@ function ReportPreview({ jobId }: { jobId: string }) {
               className="border-neutral-700 text-neutral-300 hover:text-neutral-100 gap-2"
               size="sm"
             >
-              <FileJson className="h-4 w-4" />
+              <FileCode className="h-4 w-4" />
               JSON
             </Button>
             <Button
@@ -119,7 +119,7 @@ function ReportPreview({ jobId }: { jobId: string }) {
               className="border-neutral-700 text-neutral-300 hover:text-neutral-100 gap-2"
               size="sm"
             >
-              <FileSpreadsheet className="h-4 w-4" />
+              <FileXls className="h-4 w-4" />
               CSV
             </Button>
           </div>
@@ -281,7 +281,7 @@ export function ReportsPage() {
 
       <div className="flex flex-col sm:flex-row gap-2 mb-6">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
+          <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
           <input
             type="text"
             value={inputJobId}

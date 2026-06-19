@@ -10,7 +10,7 @@ import ReactFlow, {
   useEdgesState,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
-import { Shield, Globe, Link as LinkIcon, Code, AlertTriangle } from 'lucide-react'
+import { Shield, Globe, Link, Code, WarningCircle } from '@phosphor-icons/react'
 
 interface AttackSurfaceGraphProps {
   scanId: string
@@ -40,7 +40,7 @@ const nodeTypes = {
   subdomain: ({ data }: any) => (
     <div className="px-4 py-3 rounded-lg bg-white shadow-md border border-neutral-200 hover:shadow-lg transition-shadow">
       <div className="flex items-center gap-2">
-        <LinkIcon className="w-4 h-4 text-muted-foreground" />
+        <Link className="w-4 h-4 text-muted-foreground" />
         <div className="text-sm font-medium">{data.label}</div>
       </div>
       {data.isLive && <div className="mt-1 inline-block px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-semibold rounded">Live</div>}
@@ -69,7 +69,7 @@ const nodeTypes = {
       data.severity === 'medium' ? 'bg-yellow-100 border-yellow-500' :
       'bg-neutral-100 border-neutral-400'
     }`}>
-      <AlertTriangle className={`w-3 h-3 mb-1 ${
+      <WarningCircle className={`w-3 h-3 mb-1 ${
         data.severity === 'critical' ? 'text-red-600' :
         data.severity === 'high' ? 'text-orange-600' :
         data.severity === 'medium' ? 'text-yellow-600' :
