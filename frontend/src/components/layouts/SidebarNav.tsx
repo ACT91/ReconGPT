@@ -97,7 +97,7 @@ function SidebarNavContent({ isCollapsed }: SidebarNavProps) {
     },
     {
       href: '/settings',
-      label: 'Gear',
+      label: 'Settings',
       icon: Gear,
     },
   ]

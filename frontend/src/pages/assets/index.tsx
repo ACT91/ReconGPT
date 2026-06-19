@@ -59,8 +59,8 @@ export function AssetsPage() {
       columnHelper.accessor('is_alive', {
         header: 'Status',
         cell: (info) => (
-          <span className={`inline-flex items-center gap-1 text-xs ${info.getValue() ? 'text-neutral-300' : 'text-neutral-500'}`}>
-            <span className={`w-2 h-2 rounded-lg ${info.getValue() ? 'bg-neutral-600' : 'bg-neutral-600'}`} />
+          <span className={`inline-flex items-center gap-1 text-xs ${info.getValue() ? 'text-emerald-400' : 'text-neutral-500'}`}>
+            <span className={`w-2 h-2 rounded-full ${info.getValue() ? 'bg-emerald-400' : 'bg-neutral-600'}`} />
             {info.getValue() ? 'Live' : 'Dead'}
           </span>
         ),

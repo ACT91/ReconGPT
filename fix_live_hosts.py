@@ -1,4 +1,4 @@
-"""Fix: update subdomain live host data from live_hosts.txt JSONL."""
+"""Fix: update subdomain live host data from live_hosts JSONL."""
 import asyncio, json, sys
 sys.path.insert(0, '/app')
 
@@ -12,10 +12,12 @@ async def fix():
 
     job_id = UUID(sys.argv[1]) if len(sys.argv) > 1 else UUID('f342f494-37cd-478a-b2f3-a0d4b675067d')
     storage_path = Path('/app/storage/jobs') / str(job_id)
-    live_hosts_file = storage_path / 'live_hosts.txt'
+    live_hosts_file = storage_path / 'live_hosts.json'
+    if not live_hosts_file.exists():
+        live_hosts_file = storage_path / 'live_hosts.txt'
 
     if not live_hosts_file.exists():
-        print(f'File not found: {live_hosts_file}')
+        print(f'No live hosts file found for {job_id}')
         return
 
     hosts = []
@@ -23,7 +25,10 @@ async def fix():
         for line in f:
             line = line.strip()
             if line:
-                hosts.append(json.loads(line))
+                try:
+                    hosts.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
 
     print(f'Loaded {len(hosts)} live host entries')
 
@@ -54,6 +59,6 @@ async def fix():
                 updated += 1
 
         await session.commit()
-        print(f'Updated {updated} subdomains with live host data')
+        print(f'Updated {updated} subdomains with httpx data')
 
 asyncio.run(fix())

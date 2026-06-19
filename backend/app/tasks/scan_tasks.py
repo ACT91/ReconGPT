@@ -327,7 +327,9 @@ async def _save_results_to_db(job_id: str):
                             )
                             session.add(sd)
             
-            live_hosts_file = storage_path / "live_hosts.txt"
+            live_hosts_file = storage_path / "live_hosts.json"
+            if not live_hosts_file.exists():
+                live_hosts_file = storage_path / "live_hosts.txt"
             if live_hosts_file.exists():
                 import json
                 with open(live_hosts_file) as f:
