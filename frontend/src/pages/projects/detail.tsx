@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { projectApi, scanApi, getApiError } from '@/services/api'
 import { ErrorBoundary, StatusBadge, ScanProgressBar } from '@/components/common'
 import { Button } from '@/components/ui/button'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from '@/components/ui/empty'
 import { ArrowLeft, Globe, Network, WarningCircle, Crosshair, Play } from '@phosphor-icons/react'
 import toast from 'react-hot-toast'
 import type { ScanJob } from '@/types'
@@ -35,6 +36,7 @@ function NewScanModal({
   defaultDomain?: string
 }) {
   const [targetDomain, setTargetDomain] = useState(defaultDomain || '')
+  const [runVulnScan, setRunVulnScan] = useState(true)
   const [error, setError] = useState('')
   const navigate = useNavigate()
 
@@ -47,7 +49,11 @@ function NewScanModal({
     setIsStarting(true)
     setError('')
     try {
-      const result = await scanApi.start({ target_domain: targetDomain.trim(), project_id: projectId })
+      const result = await scanApi.start({
+        target_domain: targetDomain.trim(),
+        project_id: projectId,
+        scan_config: { vuln_scan: runVulnScan },
+      })
       toast.success(`Scan started for ${targetDomain}`)
       onClose()
       navigate(`/scans/${result.job_id}`)
@@ -78,6 +84,18 @@ function NewScanModal({
             placeholder="example.com"
             required
           />
+        </div>
+        <div className="mb-4 flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="run-vuln-scan-project"
+            checked={runVulnScan}
+            onChange={(e) => setRunVulnScan(e.target.checked)}
+            className="w-4 h-4 rounded border-neutral-700 bg-neutral-800 text-primary focus:ring-primary/50"
+          />
+          <label htmlFor="run-vuln-scan-project" className="text-sm text-neutral-400">
+            Run vulnerability scan (takes longer)
+          </label>
         </div>
         <div className="flex gap-2 justify-end">
           <button
@@ -251,17 +269,22 @@ export function ProjectDetailPage() {
             ))}
           </div>
         ) : scans.length === 0 ? (
-          <div className="text-center py-16 bg-neutral-900/30 border border-neutral-800/50 rounded-lg">
-            <Play className="h-10 w-10 text-neutral-700 mx-auto mb-3" />
-            <p className="text-neutral-400">No scans yet</p>
-            <p className="text-sm text-neutral-600 mt-1">Start a scan for this project</p>
-            <Button
-              onClick={() => setShowNewScan(true)}
-              className="mt-4 bg-primary text-sidebar-bg hover:bg-primary/90/90 gap-2"
-            >
-              <Play className="h-4 w-4" />
-              Start Scan
-            </Button>
+          <div className="bg-neutral-900/30 border border-neutral-800/50 rounded-lg">
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <Play className="h-6 w-6" />
+                </EmptyMedia>
+                <EmptyTitle>No scans yet</EmptyTitle>
+                <EmptyDescription>Start a scan for this project to discover assets and vulnerabilities.</EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                <Button onClick={() => setShowNewScan(true)} className="bg-primary text-sidebar-bg hover:bg-primary/90 gap-2">
+                  <Play className="h-4 w-4" />
+                  Start Scan
+                </Button>
+              </EmptyContent>
+            </Empty>
           </div>
         ) : (
           <div className="space-y-2">

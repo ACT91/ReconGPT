@@ -165,6 +165,9 @@ export const scanApi = {
     api.patch(`/scans/${jobId}/vulnerabilities/${vulnId}`, {
       is_false_positive,
     }).then((r) => r.data),
+
+  runVulnScan: (jobId: string) =>
+    api.post<ScanResponse>(`/scans/${jobId}/vuln-scan`).then((r) => r.data),
 }
 
 export const resultApi = {
@@ -214,6 +217,55 @@ export const insightApi = {
 
   update: (jobId: string, insightId: string, data: Record<string, unknown>) =>
     api.patch<AiInsight>(`/insights/${jobId}/${insightId}`, data).then((r) => r.data),
+}
+
+export const dataApi = {
+  listSubdomains: (params?: {
+    project_id?: string
+    scan_id?: string
+    search?: string
+    status?: string
+    page?: number
+    page_size?: number
+  }) =>
+    api.get('/data/subdomains', { params }).then((r) => r.data),
+
+  listEndpoints: (params?: {
+    project_id?: string
+    scan_id?: string
+    search?: string
+    source?: string
+    method?: string
+    page?: number
+    page_size?: number
+  }) =>
+    api.get('/data/endpoints', { params }).then((r) => r.data),
+
+  listVulnerabilities: (params?: {
+    project_id?: string
+    scan_id?: string
+    severity?: string
+    search?: string
+    is_false_positive?: boolean
+    page?: number
+    page_size?: number
+  }) =>
+    api.get('/data/vulnerabilities', { params }).then((r) => r.data),
+
+  listInsights: (params?: {
+    project_id?: string
+    scan_id?: string
+    insight_type?: string
+    priority?: string
+    search?: string
+    actionable_only?: boolean
+    page?: number
+    page_size?: number
+  }) =>
+    api.get('/data/insights', { params }).then((r) => r.data),
+
+  getStats: (params?: { project_id?: string }) =>
+    api.get('/data/stats', { params }).then((r) => r.data),
 }
 
 export default api

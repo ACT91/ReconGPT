@@ -1,68 +1,167 @@
-import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useState, useMemo } from 'react'
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getPaginationRowModel,
+  createColumnHelper,
+  flexRender,
+  type SortingState,
+} from '@tanstack/react-table'
 import { useQuery } from '@tanstack/react-query'
-import { resultApi, scanApi, getApiError } from '@/services/api'
-import { ErrorBoundary, Skeleton, StatusBadge } from '@/components/common'
+import { dataApi } from '@/services/api'
+import { SeverityBadge, SkeletonTable, ErrorBoundary } from '@/components/common'
 import { Button } from '@/components/ui/button'
-import { FileText, Download, FileCode, FileXls, MagnifyingGlass } from '@phosphor-icons/react'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
+import { useProjectStore } from '@/store/project'
+import type { Vulnerability } from '@/types'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
+import { FileCode, FileXls, FileText, MagnifyingGlass } from '@phosphor-icons/react'
 import toast from 'react-hot-toast'
 
-function ReportPreview({ jobId }: { jobId: string }) {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['report-full', jobId],
-    queryFn: () => resultApi.getFull(jobId),
-    enabled: !!jobId,
-    retry: false,
+const columnHelper = createColumnHelper<Vulnerability & { scan_job_id?: string }>()
+
+function StatCard({ label, value, color }: { label: string; value: number | string; color?: string }) {
+  return (
+    <div className="bg-neutral-800/50 rounded-lg p-4">
+      <p className="text-xs text-neutral-500 uppercase tracking-wider mb-1">{label}</p>
+      <p className={`text-2xl font-bold ${color || 'text-neutral-50'}`}>{value}</p>
+    </div>
+  )
+}
+
+function SeverityBar({ data }: { data: Record<string, number> }) {
+  const total = Object.values(data).reduce((a, b) => a + b, 0) || 1
+  const segments = [
+    { key: 'critical', color: 'bg-red-500' },
+    { key: 'high', color: 'bg-orange-500' },
+    { key: 'medium', color: 'bg-yellow-500' },
+    { key: 'low', color: 'bg-blue-500' },
+    { key: 'info', color: 'bg-neutral-500' },
+  ]
+  return (
+    <div className="h-3 bg-neutral-800 rounded-lg overflow-hidden flex">
+      {segments.map((s) => {
+        const pct = ((data[s.key] || 0) / total) * 100
+        if (pct === 0) return null
+        return (
+          <div
+            key={s.key}
+            className={`h-full ${s.color} transition-all`}
+            style={{ width: `${pct}%` }}
+            title={`${s.key}: ${data[s.key]}`}
+          />
+        )
+      })}
+    </div>
+  )
+}
+
+export function ReportsPage() {
+  const selectedProject = useProjectStore((s) => s.selectedProject)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [scanIdFilter, setScanIdFilter] = useState('')
+  const [severityFilter, setSeverityFilter] = useState('')
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'severity', desc: true }])
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 50 })
+
+  const { data: stats } = useQuery({
+    queryKey: ['data-stats-reports', selectedProject?.id],
+    queryFn: () => dataApi.getStats({ project_id: selectedProject?.id }),
   })
 
-  const { data: job } = useQuery({
-    queryKey: ['scan-job', jobId],
-    queryFn: () => scanApi.get(jobId),
-    enabled: !!jobId,
+  const { data, isLoading } = useQuery({
+    queryKey: ['data-vulnerabilities-reports', pagination, sorting, searchQuery, scanIdFilter, severityFilter, selectedProject?.id],
+    queryFn: () =>
+      dataApi.listVulnerabilities({
+        page: pagination.pageIndex + 1,
+        page_size: pagination.pageSize,
+        search: searchQuery || undefined,
+        scan_id: scanIdFilter || undefined,
+        project_id: selectedProject?.id,
+        severity: severityFilter || undefined,
+      }),
   })
 
-  if (isLoading) {
-    return (
-      <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-6">
-        <div className="space-y-4">
-          <Skeleton variant="text" width={200} height={24} />
-          <Skeleton variant="text" count={4} />
-        </div>
-      </div>
-    )
-  }
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor('severity', {
+        header: 'Severity',
+        cell: (info) => <SeverityBadge severity={info.getValue()} />,
+      }),
+      columnHelper.accessor('name', {
+        header: 'Finding',
+        cell: (info) => (
+          <span className="text-sm text-neutral-200 font-medium">{info.getValue()}</span>
+        ),
+      }),
+      columnHelper.accessor('url', {
+        header: 'Endpoint',
+        cell: (info) => (
+          <span className="text-sm text-neutral-400 truncate max-w-[250px] block font-mono">{info.getValue()}</span>
+        ),
+      }),
+      columnHelper.accessor('template_id', {
+        header: 'Template',
+        cell: (info) => <span className="text-sm font-mono text-neutral-500">{info.getValue()}</span>,
+      }),
+      columnHelper.accessor('cvss_score', {
+        header: 'CVSS',
+        cell: (info) => <span className="text-sm text-neutral-400 font-mono">{info.getValue() || '\u2014'}</span>,
+      }),
+      columnHelper.accessor('scan_job_id', {
+        header: 'Scan ID',
+        cell: (info) => (
+          <span className="text-xs text-neutral-500 font-mono">
+            {info.getValue() ? (info.getValue() as string).slice(0, 8) + '...' : '\u2014'}
+          </span>
+        ),
+      }),
+    ],
+    [],
+  )
 
-  if (error) {
-    return (
-      <div className="text-center py-12 text-neutral-400">
-        <p>Failed to load report data</p>
-        <p className="text-sm text-neutral-600 mt-1">{getApiError(error)}</p>
-      </div>
-    )
-  }
-
-  const stats = data?.aggregated_stats
-  const severityCounts = stats?.vulnerabilities_by_severity || {}
+  const table = useReactTable({
+    data: data?.items || [],
+    columns,
+    state: { sorting, pagination },
+    onSortingChange: setSorting,
+    onPaginationChange: setPagination,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    pageCount: data ? Math.ceil((data.total || 0) / pagination.pageSize) : -1,
+  })
 
   const handleExportJSON = () => {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
+    if (!data?.items?.length) {
+      toast.error('No findings to export')
+      return
+    }
+    const exportData = {
+      generated_at: new Date().toISOString(),
+      project: selectedProject?.name || 'All Projects',
+      total_findings: data.total,
+      findings: data.items,
+    }
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
-    a.href = url
-    a.download = `reconny-report-${jobId}.json`
+    a.href = URL.createObjectURL(blob)
+    a.download = `reconny-report-${new Date().toISOString().slice(0, 10)}.json`
     a.click()
-    URL.revokeObjectURL(url)
+    URL.revokeObjectURL(a.href)
     toast.success('JSON report downloaded')
   }
 
   const handleExportCSV = () => {
-    if (!data?.vulnerabilities || data.vulnerabilities.length === 0) {
-      toast.error('No vulnerabilities to export')
+    if (!data?.items?.length) {
+      toast.error('No findings to export')
       return
     }
     const csv = [
-      'Severity,Name,Template ID,URL,Description,CVSS',
-      ...data.vulnerabilities.map((v: any) =>
+      'Severity,Name,Template ID,URL,Description,CVSS,Scan ID',
+      ...data.items.map((v: any) =>
         [
           v.severity,
           `"${(v.name || '').replace(/"/g, '""')}"`,
@@ -70,247 +169,191 @@ function ReportPreview({ jobId }: { jobId: string }) {
           v.url || '',
           `"${(v.description || '').replace(/"/g, '""')}"`,
           v.cvss_score || '',
+          v.scan_job_id || '',
         ].join(','),
       ),
     ].join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
-    a.href = url
-    a.download = `reconny-findings-${jobId}.csv`
+    a.href = URL.createObjectURL(blob)
+    a.download = `reconny-findings-${new Date().toISOString().slice(0, 10)}.csv`
     a.click()
-    URL.revokeObjectURL(url)
+    URL.revokeObjectURL(a.href)
     toast.success('CSV report downloaded')
   }
 
-  return (
-    <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg overflow-hidden">
-      <div className="p-6 border-b border-neutral-800">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-primary" />
-            <div>
-              <h2 className="text-lg font-semibold text-neutral-100">
-                Scan Report: {job?.target_domain || jobId}
-              </h2>
-              {job && (
-                <div className="flex items-center gap-2 mt-0.5">
-                  <StatusBadge status={job.status} />
-                  <span className="text-xs text-neutral-500">
-                    {new Date(job.created_at).toLocaleDateString()}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={handleExportJSON}
-              variant="outline"
-              className="border-neutral-700 text-neutral-300 hover:text-neutral-100 gap-2"
-              size="sm"
-            >
-              <FileCode className="h-4 w-4" />
-              JSON
-            </Button>
-            <Button
-              onClick={handleExportCSV}
-              variant="outline"
-              className="border-neutral-700 text-neutral-300 hover:text-neutral-100 gap-2"
-              size="sm"
-            >
-              <FileXls className="h-4 w-4" />
-              CSV
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      <div className="p-6 space-y-6">
-        {/* Summary Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <div className="bg-neutral-800/30 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-neutral-100">{data?.total_subdomains || 0}</p>
-            <p className="text-xs text-neutral-500 mt-0.5">Subdomains</p>
-          </div>
-          <div className="bg-neutral-800/30 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-neutral-100">{data?.total_endpoints || 0}</p>
-            <p className="text-xs text-neutral-500 mt-0.5">Endpoints</p>
-          </div>
-          <div className="bg-neutral-800/30 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-neutral-100">{data?.total_vulnerabilities || 0}</p>
-            <p className="text-xs text-neutral-500 mt-0.5">Findings</p>
-          </div>
-          <div className="bg-neutral-800/30 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-neutral-100">
-              {Object.values(severityCounts as Record<string, number>).reduce((a: number, b: number) => a + b, 0)}
-            </p>
-            <p className="text-xs text-neutral-500 mt-0.5">Total Issues</p>
-          </div>
-        </div>
-
-        {/* Severity Breakdown */}
-        {stats && (
-          <div>
-            <h3 className="text-sm font-medium text-neutral-300 mb-3">Severity Breakdown</h3>
-            <div className="space-y-2">
-              {[
-                { key: 'critical', label: 'Critical', color: 'bg-neutral-700' },
-                { key: 'high', label: 'High', color: 'bg-neutral-600' },
-                { key: 'medium', label: 'Medium', color: 'bg-neutral-600' },
-                { key: 'low', label: 'Low', color: 'bg-primary' },
-                { key: 'info', label: 'Info', color: 'bg-neutral-500' },
-              ].map((s) => {
-                const val = (severityCounts as Record<string, number>)[s.key] || 0
-                const maxVal = Math.max(
-                  ...Object.values(severityCounts as Record<string, number>),
-                  1,
-                )
-                return (
-                  <div key={s.key}>
-                    <div className="flex justify-between text-xs text-neutral-400 mb-1">
-                      <span>{s.label}</span>
-                      <span>{val}</span>
-                    </div>
-                    <div className="h-1.5 bg-neutral-800 rounded-lg overflow-hidden">
-                      <div
-                        className={`h-full ${s.color} rounded-lg transition-all`}
-                        style={{ width: `${(val / maxVal) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Vulnerabilities List */}
-        {data?.vulnerabilities && data.vulnerabilities.length > 0 && (
-          <div>
-            <h3 className="text-sm font-medium text-neutral-300 mb-3">
-              Findings ({data.vulnerabilities.length})
-            </h3>
-            <div className="space-y-2 max-h-[400px] overflow-y-auto">
-              {data.vulnerabilities.map((v: any) => (
-                <div
-                  key={v.id}
-                  className="flex items-start gap-2 p-3 rounded-lg bg-neutral-800/20 border border-neutral-800/50"
-                >
-                  <span
-                    className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
-                      v.severity === 'critical'
-                        ? 'bg-red-900/40 text-neutral-300'
-                        : v.severity === 'high'
-                        ? 'bg-neutral-600/10 text-neutral-300'
-                        : v.severity === 'medium'
-                        ? 'bg-neutral-600/10 text-neutral-300'
-                        : v.severity === 'low'
-                        ? 'bg-primary/10 text-primary'
-                        : 'bg-neutral-800 text-neutral-400'
-                    }`}
-                  >
-                    {v.severity}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-neutral-200 font-medium truncate">{v.name}</p>
-                    <p className="text-xs text-neutral-500 truncate mt-0.5 font-mono">{v.url}</p>
-                  </div>
-                  {v.cvss_score && (
-                    <span className="text-xs text-neutral-500 font-mono">{v.cvss_score}</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Subdomains */}
-        {data?.subdomains && data.subdomains.length > 0 && (
-          <div>
-            <h3 className="text-sm font-medium text-neutral-300 mb-3">
-              Subdomains ({data.subdomains.length})
-            </h3>
-            <div className="flex flex-wrap gap-1.5">
-              {data.subdomains.slice(0, 20).map((s: any) => (
-                <span
-                  key={s.id}
-                  className={`px-2 py-0.5 rounded text-xs ${
-                    s.is_alive
-                      ? 'bg-green-900/20 text-neutral-300 border border-green-900/30'
-                      : 'bg-neutral-800/50 text-neutral-500'
-                  }`}
-                >
-                  {s.name}
-                </span>
-              ))}
-              {data.subdomains.length > 20 && (
-                <span className="text-xs text-neutral-500 px-2 py-0.5">
-                  +{data.subdomains.length - 20} more
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-export function ReportsPage() {
-  const { scanId } = useParams<{ scanId: string }>()
-  const [jobId, setJobId] = useState(scanId || '')
-  const [inputJobId, setInputJobId] = useState(scanId || '')
-
-  // Auto-load when scanId is in URL
-  useEffect(() => {
-    if (scanId && scanId !== jobId) {
-      setJobId(scanId)
-      setInputJobId(scanId)
-    }
-  }, [scanId])
+  const severityBreakdown: Record<string, number> = stats?.vulnerabilities_by_severity || {}
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-neutral-100">Reports</h1>
-          <p className="text-sm text-neutral-400 mt-1">Generate and export scan reports</p>
+          <p className="text-sm text-neutral-400 mt-1">Generate and export scan reports across all scans</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {selectedProject && (
+            <Badge variant="outline" className="text-neutral-400 text-xs">
+              {selectedProject.name}
+            </Badge>
+          )}
+          <Button onClick={handleExportJSON} variant="outline" size="sm" className="border-neutral-700 text-neutral-300 gap-2">
+            <FileCode className="h-4 w-4" />
+            JSON
+          </Button>
+          <Button onClick={handleExportCSV} variant="outline" size="sm" className="border-neutral-700 text-neutral-300 gap-2">
+            <FileXls className="h-4 w-4" />
+            CSV
+          </Button>
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-2 mb-6">
-        <div className="relative flex-1 max-w-md">
-          <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
-          <input
-            type="text"
-            value={inputJobId}
-            onChange={(e) => setInputJobId(e.target.value)}
-            placeholder="Enter scan job ID..."
-            className="w-full bg-neutral-800/50 border border-neutral-700 rounded-lg pl-10 pr-4 py-2.5 text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary/50"
-          />
-        </div>
-        <Button
-          onClick={() => setJobId(inputJobId)}
-          disabled={!inputJobId.trim()}
-          className="bg-primary text-sidebar-bg hover:bg-primary/90/90 gap-2"
-        >
-          <Download className="h-4 w-4" />
-          Generate Report
-        </Button>
-      </div>
+      {stats && (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            <StatCard label="Total Scans" value={stats.total_scans} color="text-primary" />
+            <StatCard label="Subdomains" value={stats.total_subdomains} color="text-neutral-300" />
+            <StatCard label="Endpoints" value={stats.total_endpoints} color="text-neutral-300" />
+            <StatCard label="Findings" value={stats.total_vulnerabilities} color="text-neutral-300" />
+          </div>
 
-      {!jobId ? (
-        <div className="text-center py-20">
-          <FileText className="h-12 w-12 text-neutral-700 mx-auto mb-4" />
-          <p className="text-lg text-neutral-400">Enter a scan job ID</p>
-          <p className="text-sm text-neutral-600 mt-1">
-            Generate a comprehensive report from a completed scan
-          </p>
+          <Card className="bg-neutral-900/50 border-neutral-800 mb-6">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-medium text-neutral-300">
+                  Severity Breakdown ({Object.values(severityBreakdown).reduce((a, b) => a + b, 0)} total)
+                </h2>
+                <div className="flex gap-3 text-xs text-neutral-500">
+                  {[
+                    { key: 'critical', label: 'Critical', color: 'text-red-400' },
+                    { key: 'high', label: 'High', color: 'text-orange-400' },
+                    { key: 'medium', label: 'Medium', color: 'text-yellow-400' },
+                    { key: 'low', label: 'Low', color: 'text-blue-400' },
+                    { key: 'info', label: 'Info', color: 'text-neutral-400' },
+                  ].map((s) => (
+                    <span key={s.key} className={s.color}>
+                      {s.label}: {severityBreakdown[s.key] || 0}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <SeverityBar data={severityBreakdown} />
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      <Card className="bg-neutral-900/50 border-neutral-800 mb-4">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex gap-3 items-end">
+            <div className="relative flex-1 max-w-md">
+              <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search findings..."
+                className="w-full bg-neutral-800/50 border border-neutral-700 rounded-lg pl-10 pr-4 py-2.5 text-neutral-100 placeholder-neutral-500 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+            </div>
+            <input
+              type="text"
+              value={scanIdFilter}
+              onChange={(e) => setScanIdFilter(e.target.value)}
+              placeholder="Filter by Scan ID..."
+              className="bg-neutral-800/50 border border-neutral-700 rounded-lg px-4 py-2.5 text-neutral-100 placeholder-neutral-500 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 w-48"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2 items-center">
+            {['', 'critical', 'high', 'medium', 'low', 'info'].map((sev) => (
+              <button
+                key={sev}
+                onClick={() => setSeverityFilter(sev)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  severityFilter === sev
+                    ? 'bg-primary text-sidebar-bg'
+                    : 'bg-neutral-800 text-neutral-400 hover:text-neutral-200'
+                }`}
+              >
+                {sev ? sev.charAt(0).toUpperCase() + sev.slice(1) : 'All'}
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {isLoading ? (
+        <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg overflow-hidden">
+          <SkeletonTable rows={8} cols={6} />
         </div>
       ) : (
         <ErrorBoundary>
-          <ReportPreview jobId={jobId} />
+          {table.getRowModel().rows.length === 0 ? (
+            <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg">
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <FileText className="h-6 w-6" />
+                  </EmptyMedia>
+                  <EmptyTitle>No findings to report</EmptyTitle>
+                  <EmptyDescription>Run a scan with vulnerability detection to generate findings.</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            </div>
+          ) : (
+          <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <tr key={headerGroup.id} className="border-b border-neutral-800">
+                      {headerGroup.headers.map((header) => (
+                        <th
+                          key={header.id}
+                          className="text-left text-xs font-medium text-neutral-500 uppercase tracking-wider px-4 py-3 cursor-pointer hover:text-neutral-300 transition-colors"
+                          onClick={header.column.getToggleSortingHandler()}
+                        >
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {{ asc: ' \u2191', desc: ' \u2193' }[header.column.getIsSorted() as string] ?? null}
+                        </th>
+                      ))}
+                    </tr>
+                  ))}
+                </thead>
+                <tbody>
+                    {table.getRowModel().rows.map((row) => (
+                      <tr key={row.id} className="border-b border-neutral-800/50 hover:bg-neutral-800/20 transition-colors">
+                        {row.getVisibleCells().map((cell) => (
+                          <td key={cell.id} className="px-4 py-3">
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-800">
+              <span className="text-sm text-neutral-500">{data?.total || 0} total findings</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => table.previousPage()}
+                  disabled={!table.getCanPreviousPage()}
+                  className="px-3 py-1.5 bg-neutral-800 rounded-lg text-sm text-neutral-300 disabled:opacity-50 hover:bg-neutral-700 transition-colors"
+                >
+                  Prev
+                </button>
+                <button
+                  onClick={() => table.nextPage()}
+                  disabled={!table.getCanNextPage()}
+                  className="px-3 py-1.5 bg-neutral-800 rounded-lg text-sm text-neutral-300 disabled:opacity-50 hover:bg-neutral-700 transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+          )}
         </ErrorBoundary>
       )}
     </div>

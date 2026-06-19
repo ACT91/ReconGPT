@@ -1,48 +1,29 @@
-import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useState, useMemo } from 'react'
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getPaginationRowModel,
+  createColumnHelper,
+  flexRender,
+  type SortingState,
+} from '@tanstack/react-table'
 import { useQuery } from '@tanstack/react-query'
-import { insightApi, resultApi } from '@/services/api'
-import { SeverityBadge, Skeleton, ErrorBoundary } from '@/components/common'
-import type { AggregatedStats } from '@/types'
+import { dataApi } from '@/services/api'
+import { SeverityBadge, SkeletonTable, ErrorBoundary } from '@/components/common'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
+import { useProjectStore } from '@/store/project'
+import type { AiInsight } from '@/types'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
+import { Download, Funnel, Lightbulb, MagnifyingGlass, Robot } from '@phosphor-icons/react'
+import toast from 'react-hot-toast'
 
-function RiskScoreGauge({ score }: { score: number }) {
-  const getColor = (s: number) => {
-    if (s >= 70) return 'text-neutral-300'
-    if (s >= 40) return 'text-neutral-300'
-    return 'text-neutral-300'
-  }
+const columnHelper = createColumnHelper<AiInsight & { scan_job_id?: string }>()
 
-  const getLabel = (s: number) => {
-    if (s >= 70) return 'High Risk'
-    if (s >= 40) return 'Medium Risk'
-    return 'Low Risk'
-  }
-
-  return (
-    <div className="flex flex-col items-center">
-      <div className="relative w-32 h-32 mb-3">
-        <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-          <circle cx="18" cy="18" r="15.9" fill="none" stroke="#1f2937" strokeWidth="2.8" />
-          <circle
-            cx="18"
-            cy="18"
-            r="15.9"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.8"
-            strokeDasharray={`${score}, 100`}
-            className={getColor(score)}
-            strokeLinecap="round"
-          />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className={`text-3xl font-bold ${getColor(score)}`}>{Math.round(score)}</span>
-        </div>
-      </div>
-      <span className={`text-sm font-medium ${getColor(score)}`}>{getLabel(score)}</span>
-    </div>
-  )
-}
+const INSIGHT_TYPE_OPTIONS = ['all', 'recommendation', 'finding', 'observation', 'trend', 'anomaly']
+const PRIORITY_OPTIONS = ['all', 'critical', 'high', 'medium', 'low', 'info']
 
 function StatCard({ label, value, color }: { label: string; value: number | string; color?: string }) {
   return (
@@ -53,25 +34,20 @@ function StatCard({ label, value, color }: { label: string; value: number | stri
   )
 }
 
-function VsSeverityChart({ stats }: { stats: AggregatedStats }) {
+function SeverityChart({ data }: { data: Record<string, number> }) {
   const severities = [
-    { key: 'critical', label: 'Critical', color: 'bg-neutral-700' },
-    { key: 'high', label: 'High', color: 'bg-neutral-600' },
-    { key: 'medium', label: 'Medium', color: 'bg-neutral-600' },
-    { key: 'low', label: 'Low', color: 'bg-primary' },
+    { key: 'critical', label: 'Critical', color: 'bg-red-500' },
+    { key: 'high', label: 'High', color: 'bg-orange-500' },
+    { key: 'medium', label: 'Medium', color: 'bg-yellow-500' },
+    { key: 'low', label: 'Low', color: 'bg-blue-500' },
     { key: 'info', label: 'Info', color: 'bg-neutral-500' },
   ]
-
-  const maxVal = Math.max(
-    ...severities.map((s) => stats.vulnerabilities_by_severity[s.key] || 0),
-    1
-  )
+  const maxVal = Math.max(...severities.map((s) => data[s.key] || 0), 1)
 
   return (
     <div className="space-y-2">
       {severities.map((s) => {
-        const val = stats.vulnerabilities_by_severity[s.key] || 0
-        const pct = (val / maxVal) * 100
+        const val = data[s.key] || 0
         return (
           <div key={s.key}>
             <div className="flex justify-between text-xs text-neutral-400 mb-1">
@@ -79,7 +55,7 @@ function VsSeverityChart({ stats }: { stats: AggregatedStats }) {
               <span>{val}</span>
             </div>
             <div className="h-2 bg-neutral-800 rounded-lg overflow-hidden">
-              <div className={`h-full ${s.color} rounded-lg transition-all`} style={{ width: `${pct}%` }} />
+              <div className={`h-full ${s.color} rounded-lg transition-all`} style={{ width: `${(val / maxVal) * 100}%` }} />
             </div>
           </div>
         )
@@ -89,194 +65,292 @@ function VsSeverityChart({ stats }: { stats: AggregatedStats }) {
 }
 
 export function AIAnalysisPage() {
-  const { scanId } = useParams<{ scanId: string }>()
-  const [jobId, setJobId] = useState(scanId || '')
-  const [inputJobId, setInputJobId] = useState(scanId || '')
-
-  // Auto-load when scanId is in URL
-  useEffect(() => {
-    if (scanId && scanId !== jobId) {
-      setJobId(scanId)
-      setInputJobId(scanId)
-    }
-  }, [scanId])
-
-  const { data: summary, isLoading: summaryLoading } = useQuery({
-    queryKey: ['ai-summary', jobId],
-    queryFn: () => insightApi.executiveSummary(jobId),
-    enabled: !!jobId,
-    retry: false,
-  })
-
-  const { data: riskScore } = useQuery({
-    queryKey: ['ai-risk-score', jobId],
-    queryFn: () => insightApi.riskScore(jobId),
-    enabled: !!jobId,
-    retry: false,
-  })
-
-  const { data: insights } = useQuery({
-    queryKey: ['ai-insights', jobId],
-    queryFn: () => insightApi.list(jobId, { page_size: 50 }),
-    enabled: !!jobId,
-  })
+  const selectedProject = useProjectStore((s) => s.selectedProject)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [scanIdFilter, setScanIdFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [priorityFilter, setPriorityFilter] = useState('all')
+  const [actionableOnly, setActionableOnly] = useState(false)
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'priority_score', desc: true }])
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 50 })
 
   const { data: stats } = useQuery({
-    queryKey: ['result-stats', jobId],
-    queryFn: () => resultApi.getStats(jobId),
-    enabled: !!jobId,
-    retry: false,
+    queryKey: ['data-stats', selectedProject?.id],
+    queryFn: () => dataApi.getStats({ project_id: selectedProject?.id }),
   })
 
-  const { data: attackVectors } = useQuery({
-    queryKey: ['ai-vectors', jobId],
-    queryFn: () => insightApi.attackVectors(jobId),
-    enabled: !!jobId,
-    retry: false,
+  const { data, isLoading } = useQuery({
+    queryKey: ['data-insights', pagination, searchQuery, scanIdFilter, typeFilter, priorityFilter, actionableOnly, selectedProject?.id],
+    queryFn: () =>
+      dataApi.listInsights({
+        page: pagination.pageIndex + 1,
+        page_size: pagination.pageSize,
+        search: searchQuery || undefined,
+        scan_id: scanIdFilter || undefined,
+        project_id: selectedProject?.id,
+        insight_type: typeFilter === 'all' ? undefined : typeFilter,
+        priority: priorityFilter === 'all' ? undefined : priorityFilter,
+        actionable_only: actionableOnly || undefined,
+      }),
   })
+
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor('priority', {
+        header: 'Priority',
+        cell: (info) => <SeverityBadge severity={info.getValue()} />,
+      }),
+      columnHelper.accessor('title', {
+        header: 'Title',
+        cell: (info) => (
+          <div className="flex items-center gap-2">
+            {info.row.original.is_actionable && (
+              <Lightbulb className="h-3.5 w-3.5 text-primary shrink-0" />
+            )}
+            <span className="text-sm text-neutral-200 font-medium">{info.getValue()}</span>
+          </div>
+        ),
+      }),
+      columnHelper.accessor('type', {
+        header: 'Type',
+        cell: (info) => (
+          <span className="text-xs text-neutral-500 bg-neutral-800/50 px-2 py-0.5 rounded capitalize">
+            {info.getValue().replace(/_/g, ' ')}
+          </span>
+        ),
+      }),
+      columnHelper.accessor('summary', {
+        header: 'Summary',
+        cell: (info) => (
+          <span className="text-xs text-neutral-400 truncate max-w-[300px] block">
+            {info.getValue() || '\u2014'}
+          </span>
+        ),
+      }),
+      columnHelper.accessor('priority_score', {
+        header: 'Score',
+        cell: (info) => (
+          <span className="text-sm text-neutral-400 font-mono">{info.getValue()?.toFixed(1)}</span>
+        ),
+      }),
+      columnHelper.accessor('scan_job_id', {
+        header: 'Scan ID',
+        cell: (info) => (
+          <span className="text-xs text-neutral-500 font-mono">
+            {info.getValue() ? (info.getValue() as string).slice(0, 8) + '...' : '\u2014'}
+          </span>
+        ),
+      }),
+    ],
+    [],
+  )
+
+  const table = useReactTable({
+    data: data?.items || [],
+    columns,
+    state: { sorting, pagination },
+    onSortingChange: setSorting,
+    onPaginationChange: setPagination,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    pageCount: data ? Math.ceil((data.total || 0) / pagination.pageSize) : -1,
+  })
+
+  const handleExport = () => {
+    if (!data?.items?.length) {
+      toast.error('No insights to export')
+      return
+    }
+    const csv = [
+      'Priority,Title,Type,Summary,Score,Scan ID',
+      ...data.items.map((i: any) =>
+        [i.priority, `"${(i.title || '').replace(/"/g, '""')}"`, i.type, `"${(i.summary || '').replace(/"/g, '""')}"`, i.priority_score, i.scan_job_id || ''].join(','),
+      ),
+    ].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `insights-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(a.href)
+    toast.success(`Exported ${data.items.length} insights`)
+  }
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-light text-neutral-50">AI Analysis</h1>
-          <p className="text-neutral-400 text-sm mt-1">Automated intelligence and risk assessment</p>
+          <h1 className="text-2xl font-semibold text-neutral-100">AI Analysis</h1>
+          <p className="text-sm text-neutral-400 mt-1">Automated intelligence and risk assessment across scans</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {selectedProject && (
+            <Badge variant="outline" className="text-neutral-400 text-xs">
+              {selectedProject.name}
+            </Badge>
+          )}
+          {data?.items?.length > 0 && (
+            <Button onClick={handleExport} variant="outline" size="sm" className="border-neutral-700 text-neutral-300 gap-2">
+              <Download className="h-4 w-4" />
+              Export
+            </Button>
+          )}
         </div>
       </div>
 
-      <div className="flex gap-2 mb-6">
-        <input
-          type="text"
-          value={inputJobId}
-          onChange={(e) => setInputJobId(e.target.value)}
-          placeholder="Enter scan job ID..."
-          className="bg-neutral-800 border border-neutral-700 rounded-lg px-4 py-2 text-neutral-50 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary/50 w-80"
-        />
-        <button
-          onClick={() => setJobId(inputJobId)}
-          className="px-4 py-2 bg-primary text-sidebar-bg hover:bg-primary/90 rounded-lg text-sm"
-        >
-          Load Analysis
-        </button>
-      </div>
+      {stats && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+          <StatCard label="Scans" value={stats.total_scans} color="text-primary" />
+          <StatCard label="Subdomains" value={stats.total_subdomains} color="text-neutral-300" />
+          <StatCard label="Endpoints" value={stats.total_endpoints} color="text-neutral-300" />
+          <StatCard label="Findings" value={stats.total_vulnerabilities} color="text-neutral-300" />
+          <StatCard label="Insights" value={stats.total_insights} color="text-neutral-300" />
+          <StatCard label="Critical" value={stats.vulnerabilities_by_severity?.critical || 0} color="text-red-400" />
+        </div>
+      )}
 
-      {!jobId ? (
-        <div className="text-center py-20 text-neutral-500">
-          <p className="text-lg">Enter a scan job ID to view AI analysis</p>
+      {stats && (
+        <Card className="bg-neutral-900/50 border-neutral-800 mb-6">
+          <CardContent className="p-6">
+            <h2 className="text-lg font-semibold text-neutral-50 mb-4">Vulnerabilities by Severity</h2>
+            <SeverityChart data={stats.vulnerabilities_by_severity} />
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="bg-neutral-900/50 border-neutral-800 mb-4">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex gap-3 items-end">
+            <div className="relative flex-1 max-w-md">
+              <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search insights..."
+                className="w-full bg-neutral-800/50 border border-neutral-700 rounded-lg pl-10 pr-4 py-2.5 text-neutral-100 placeholder-neutral-500 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+            </div>
+            <input
+              type="text"
+              value={scanIdFilter}
+              onChange={(e) => setScanIdFilter(e.target.value)}
+              placeholder="Filter by Scan ID..."
+              className="bg-neutral-800/50 border border-neutral-700 rounded-lg px-4 py-2.5 text-neutral-100 placeholder-neutral-500 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 w-48"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2 items-center">
+            <Funnel className="h-4 w-4 text-neutral-500 shrink-0" />
+            {INSIGHT_TYPE_OPTIONS.map((type) => (
+              <button
+                key={type}
+                onClick={() => setTypeFilter(type)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  typeFilter === type ? 'bg-primary text-sidebar-bg' : 'bg-neutral-800 text-neutral-400 hover:text-neutral-200'
+                }`}
+              >
+                {type === 'all' ? 'All Types' : type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+              </button>
+            ))}
+            <div className="w-px h-6 bg-neutral-800 mx-1" />
+            {PRIORITY_OPTIONS.map((p) => (
+              <button
+                key={p}
+                onClick={() => setPriorityFilter(p)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  priorityFilter === p ? 'bg-primary text-sidebar-bg' : 'bg-neutral-800 text-neutral-400 hover:text-neutral-200'
+                }`}
+              >
+                {p === 'all' ? 'All Priority' : p.charAt(0).toUpperCase() + p.slice(1)}
+              </button>
+            ))}
+            <div className="w-px h-6 bg-neutral-800 mx-1" />
+            <button
+              onClick={() => setActionableOnly(!actionableOnly)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 ${
+                actionableOnly ? 'bg-primary text-sidebar-bg' : 'bg-neutral-800 text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <Lightbulb className="h-3.5 w-3.5" />
+              Actionable Only
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {isLoading ? (
+        <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg overflow-hidden">
+          <SkeletonTable rows={6} cols={6} />
         </div>
       ) : (
-        <ErrorBoundary><div className="space-y-6">
-          {/* Risk Score + Stats Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-            <div className="bg-neutral-900 rounded-lg border border-neutral-800 p-6 flex items-center justify-center">
-              {riskScore ? (
-                <RiskScoreGauge score={(riskScore as any)?.overall_score || 0} />
-              ) : (
-                <div className="flex flex-col items-center gap-2">
-                  <Skeleton variant="circular" width={128} height={128} />
-                  <Skeleton variant="text" width={80} height={16} />
-                </div>
-              )}
+        <ErrorBoundary>
+          {table.getRowModel().rows.length === 0 ? (
+            <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg">
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <Robot className="h-6 w-6" />
+                  </EmptyMedia>
+                  <EmptyTitle>No AI insights found</EmptyTitle>
+                  <EmptyDescription>Insights are generated during scans with AI analysis enabled. Run a scan to see insights here.</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             </div>
-            <div className="lg:col-span-3 grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {stats ? (
-                <>
-                  <StatCard label="Subdomains" value={stats?.total_subdomains || 0} color="text-primary" />
-                  <StatCard label="Live Hosts" value={stats?.live_subdomains || 0} color="text-neutral-300" />
-                  <StatCard label="Endpoints" value={stats?.total_endpoints || 0} color="text-neutral-300" />
-                  <StatCard label="Vulnerabilities" value={stats?.total_vulnerabilities || 0} color="text-neutral-300" />
-                  <StatCard label="Critical" value={stats?.vulnerabilities_by_severity?.critical || 0} color="text-neutral-300" />
-                  <StatCard label="High" value={stats?.vulnerabilities_by_severity?.high || 0} color="text-neutral-300" />
-                </>
-              ) : (
-                <>
-                  {['Subdomains', 'Live Hosts', 'Endpoints', 'Vulnerabilities', 'Critical', 'High'].map((label) => (
-                    <div key={label} className="bg-neutral-800/50 rounded-lg p-4">
-                      <p className="text-xs text-neutral-500 uppercase tracking-wider mb-1">{label}</p>
-                      <Skeleton variant="text" width={60} height={28} />
-                    </div>
+          ) : (
+          <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <tr key={headerGroup.id} className="border-b border-neutral-800">
+                      {headerGroup.headers.map((header) => (
+                        <th
+                          key={header.id}
+                          className="text-left text-xs font-medium text-neutral-500 uppercase tracking-wider px-4 py-3 cursor-pointer hover:text-neutral-300 transition-colors"
+                          onClick={header.column.getToggleSortingHandler()}
+                        >
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {{ asc: ' \u2191', desc: ' \u2193' }[header.column.getIsSorted() as string] ?? null}
+                        </th>
+                      ))}
+                    </tr>
                   ))}
-                </>
-              )}
+                </thead>
+                <tbody>
+                    {table.getRowModel().rows.map((row) => (
+                      <tr key={row.id} className="border-b border-neutral-800/50 hover:bg-neutral-800/20 transition-colors">
+                        {row.getVisibleCells().map((cell) => (
+                          <td key={cell.id} className="px-4 py-3">
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-800">
+              <span className="text-sm text-neutral-500">{data?.total || 0} total insights</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => table.previousPage()}
+                  disabled={!table.getCanPreviousPage()}
+                  className="px-3 py-1.5 bg-neutral-800 rounded-lg text-sm text-neutral-300 disabled:opacity-50 hover:bg-neutral-700 transition-colors"
+                >
+                  Prev
+                </button>
+                <button
+                  onClick={() => table.nextPage()}
+                  disabled={!table.getCanNextPage()}
+                  className="px-3 py-1.5 bg-neutral-800 rounded-lg text-sm text-neutral-300 disabled:opacity-50 hover:bg-neutral-700 transition-colors"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           </div>
-
-          {/* Vulnerabilities by Severity */}
-          {stats && (
-            <div className="bg-neutral-900 rounded-lg border border-neutral-800 p-6">
-              <h2 className="text-lg font-semibold text-neutral-50 mb-4">Vulnerabilities by Severity</h2>
-              <VsSeverityChart stats={stats} />
-            </div>
           )}
-
-          {/* Executive Summary */}
-          {summaryLoading ? (
-            <div className="bg-neutral-900 rounded-lg border border-neutral-800 p-6">
-              <h2 className="text-lg font-semibold text-neutral-50 mb-4">Executive Summary</h2>
-              <div className="space-y-3">
-                <Skeleton variant="text" count={4} />
-              </div>
-            </div>
-          ) : summary ? (
-            <div className="bg-neutral-900 rounded-lg border border-neutral-800 p-6">
-              <h2 className="text-lg font-semibold text-neutral-50 mb-4">Executive Summary</h2>
-              <div className="prose prose-invert max-w-none">
-                <p className="text-neutral-300 leading-relaxed whitespace-pre-wrap">
-                  {(summary as any).content || summary.summary || 'No summary available'}
-                </p>
-              </div>
-            </div>
-          ) : null}
-
-          {/* Prioritized Recommendations / Attack Vectors */}
-          {attackVectors && Array.isArray(attackVectors) && attackVectors.length > 0 && (
-            <div className="bg-neutral-900 rounded-lg border border-neutral-800 p-6">
-              <h2 className="text-lg font-semibold text-neutral-50 mb-4">Prioritized Recommendations</h2>
-              <div className="space-y-3">
-                {attackVectors.map((v: any) => (
-                  <div key={v.id} className="bg-neutral-800/50 rounded-lg p-4 border border-neutral-700/50">
-                    <div className="flex items-start justify-between mb-2">
-                      <h3 className="font-medium text-neutral-50">{v.title}</h3>
-                      <SeverityBadge severity={v.priority} />
-                    </div>
-                    <p className="text-sm text-neutral-400 line-clamp-2">{v.summary}</p>
-                    {v.affected_assets && v.affected_assets.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {v.affected_assets.slice(0, 5).map((asset: string) => (
-                          <span key={asset} className="px-2 py-0.5 rounded text-xs bg-neutral-800 text-neutral-300">
-                            {asset}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* All Insights */}
-          {insights?.items && insights.items.length > 0 && (
-            <div className="bg-neutral-900 rounded-lg border border-neutral-800 p-6">
-              <h2 className="text-lg font-semibold text-neutral-50 mb-4">All AI Insights ({insights.total})</h2>
-              <div className="space-y-2">
-                {insights.items.map((insight) => (
-                  <div key={insight.id} className="bg-neutral-800/30 rounded-lg p-3 border border-neutral-700/30">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs text-neutral-500 uppercase">{insight.type}</span>
-                      <SeverityBadge severity={insight.priority} />
-                      {insight.is_actionable && (
-                        <span className="text-xs text-primary">Actionable</span>
-                      )}
-                    </div>
-                    <p className="text-sm text-neutral-50">{insight.title}</p>
-                    <p className="text-xs text-neutral-400 mt-1 line-clamp-2">{insight.summary || insight.content}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
         </ErrorBoundary>
       )}
     </div>

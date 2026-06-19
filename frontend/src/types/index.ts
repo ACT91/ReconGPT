@@ -146,6 +146,7 @@ export interface Endpoint {
 
 export interface Vulnerability {
   id: string
+  scan_job_id?: string
   name: string
   template_id: string
   severity: 'info' | 'low' | 'medium' | 'high' | 'critical'
@@ -155,6 +156,7 @@ export interface Vulnerability {
   cve_ids?: string[]
   cwe_ids?: string[]
   cvss_score?: number
+  cvss_vector?: string
   matched_at?: string
   discovered_at?: string
   is_false_positive?: boolean

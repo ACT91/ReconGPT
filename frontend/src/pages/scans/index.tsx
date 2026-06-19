@@ -11,11 +11,16 @@ import {
   type SortingState,
 } from '@tanstack/react-table'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { scanApi, getApiError } from '@/services/api'
+import { scanApi, projectApi, getApiError } from '@/services/api'
+import { useProjectStore } from '@/store/project'
 import { useScanWebSocket } from '@/hooks/useScanWebSocket'
 import { ScanProgressBar, StatusBadge, LiveLogsViewer, SkeletonTable, ErrorBoundary } from '@/components/common'
-import type { ScanJob, ScanProgress, ScanLogEntry } from '@/types'
-import { Globe, Network, WarningCircle, Robot, FileText } from '@phosphor-icons/react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
+import type { ScanJob, ScanProgress, ScanLogEntry, Project } from '@/types'
+import { Globe, Network, WarningCircle, Robot, FileText, FloppyDisk, RocketLaunch } from '@phosphor-icons/react'
+import toast from 'react-hot-toast'
 
 const columnHelper = createColumnHelper<ScanJob>()
 
@@ -27,15 +32,29 @@ function NewScanModal({
   onClose: () => void
 }) {
   const [targetDomain, setTargetDomain] = useState('')
-  const queryClient = useQueryClient()
+  const [projectId, setProjectId] = useState('')
+  const [runVulnScan, setRunVulnScan] = useState(true)
   const [error, setError] = useState('')
+  const queryClient = useQueryClient()
+  const selectedProject = useProjectStore((s) => s.selectedProject)
+
+  const { data: projectsData } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => projectApi.list({ page_size: 100 }),
+  })
+
+  const projects = projectsData?.items || []
+  const effectiveProjectId = projectId || selectedProject?.id || ''
 
   const startScan = useMutation({
-    mutationFn: scanApi.start,
+    mutationFn: (data: { target_domain: string; project_id?: string; config?: Record<string, unknown> }) =>
+      scanApi.start(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scans'] })
       onClose()
       setTargetDomain('')
+      setProjectId('')
+      setRunVulnScan(true)
     },
     onError: (err) => setError(getApiError(err)),
   })
@@ -53,7 +72,11 @@ function NewScanModal({
           onSubmit={(e) => {
             e.preventDefault()
             setError('')
-            startScan.mutate({ target_domain: targetDomain })
+            startScan.mutate({
+              target_domain: targetDomain,
+              project_id: effectiveProjectId || undefined,
+              config: { vuln_scan: runVulnScan },
+            })
           }}
         >
           <div className="mb-4">
@@ -67,6 +90,36 @@ function NewScanModal({
               required
             />
           </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-neutral-300 mb-2">Project (optional)</label>
+            <select
+              value={effectiveProjectId}
+              onChange={(e) => setProjectId(e.target.value)}
+              className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-4 py-2.5 text-neutral-50 focus:outline-none focus:ring-2 focus:ring-primary/50"
+            >
+              <option value="">{selectedProject ? selectedProject.name : 'No project selected'}</option>
+              {projects.map((p: Project) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mb-4 flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="run-vuln-scan"
+              checked={runVulnScan}
+              onChange={(e) => setRunVulnScan(e.target.checked)}
+              className="w-4 h-4 rounded border-neutral-700 bg-neutral-800 text-primary focus:ring-primary/50"
+            />
+            <label htmlFor="run-vuln-scan" className="text-sm text-neutral-300">
+              Run vulnerability scan (takes longer)
+            </label>
+          </div>
+
           <div className="flex gap-2 justify-end">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-neutral-300 hover:text-neutral-50 transition-colors">
               Cancel
@@ -89,6 +142,7 @@ function ScanDetailPanel({ job, onClose }: { job: ScanJob; onClose: () => void }
   const [progress, setProgress] = useState<ScanProgress | null>(null)
   const [logs, setLogs] = useState<ScanLogEntry[]>([])
   const [activeTab, setActiveTab] = useState<'progress' | 'logs'>('progress')
+  const queryClient = useQueryClient()
 
   const { data: progressData } = useQuery({
     queryKey: ['scan-progress', job.id],
@@ -130,13 +184,28 @@ function ScanDetailPanel({ job, onClose }: { job: ScanJob; onClose: () => void }
     },
     onStatus: (msg) => {
       if (msg.status === 'completed' || msg.status === 'failed') {
-        setTimeout(() => onClose(), 3000)
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['scans'] })
+          onClose()
+        }, 3000)
       }
     },
   })
 
+  const vulnScanMutation = useMutation({
+    mutationFn: () => scanApi.runVulnScan(job.id),
+    onSuccess: () => {
+      toast.success('Vulnerability scan started')
+      queryClient.invalidateQueries({ queryKey: ['scans'] })
+      onClose()
+    },
+    onError: (err) => toast.error(getApiError(err)),
+  })
+
   const displayProgress = progressData || progress
   const displayLogs = logsData?.items || logs
+
+  const canRunVulnScan = (job.status === 'completed' || job.status === 'partial') && !vulnScanMutation.isPending
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
@@ -147,12 +216,17 @@ function ScanDetailPanel({ job, onClose }: { job: ScanJob; onClose: () => void }
             <div className="flex items-center gap-2 mt-1">
               <StatusBadge status={job.status} />
               <span className="text-sm text-neutral-400">Started {new Date(job.created_at).toLocaleString()}</span>
+              {job.project_id && (
+                <Badge variant="outline" className="text-xs text-neutral-500">
+                  Project: {job.project_id.slice(0, 8)}...
+                </Badge>
+              )}
             </div>
           </div>
           <button onClick={onClose} className="text-neutral-400 hover:text-neutral-50 text-xl">&times;</button>
         </div>
 
-        <div className="px-4 py-2 border-b border-neutral-800 flex gap-2">
+        <div className="px-4 py-2 border-b border-neutral-800 flex gap-2 flex-wrap">
           <Link to={`/assets/${job.id}`} className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-primary transition-colors">
             <Globe className="h-3.5 w-3.5" /> Assets
           </Link>
@@ -168,6 +242,17 @@ function ScanDetailPanel({ job, onClose }: { job: ScanJob; onClose: () => void }
           <Link to={`/reports/${job.id}`} className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-primary transition-colors">
             <FileText className="h-3.5 w-3.5" /> Reports
           </Link>
+          {canRunVulnScan && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                vulnScanMutation.mutate()
+              }}
+              className="flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 transition-colors"
+            >
+              <FloppyDisk className="h-3.5 w-3.5" /> Run Vuln Scan
+            </button>
+          )}
         </div>
 
         <div className="flex border-b border-neutral-800">
@@ -206,7 +291,7 @@ function ScanDetailPanel({ job, onClose }: { job: ScanJob; onClose: () => void }
           {activeTab === 'logs' && <LiveLogsViewer logs={displayLogs} maxHeight="60vh" />}
         </div>
 
-        {job.status === 'running' && (
+        {(job.status === 'running' || job.status === 'queued') && (
           <div className="p-4 border-t border-neutral-800">
             <button
               onClick={async () => {
@@ -231,15 +316,17 @@ export function ScansPage() {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'created_at', desc: true }])
   const [globalFilter, setGlobalFilter] = useState('')
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
+  const selectedProject = useProjectStore((s) => s.selectedProject)
 
   const { data: scansData, isLoading } = useQuery({
-    queryKey: ['scans', pagination, sorting, globalFilter],
+    queryKey: ['scans', pagination, sorting, globalFilter, selectedProject?.id],
     queryFn: () =>
       scanApi.list({
         page: pagination.pageIndex + 1,
         page_size: pagination.pageSize,
         sort: sorting.length > 0 ? `${sorting[0].id}:${sorting[0].desc ? 'desc' : 'asc'}` : undefined,
         search: globalFilter || undefined,
+        ...(selectedProject?.id ? { project_id: selectedProject.id } : {}),
       }),
   })
 
@@ -247,6 +334,15 @@ export function ScansPage() {
   const cancelScan = useMutation({
     mutationFn: (jobId: string) => scanApi.cancel(jobId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['scans'] }),
+  })
+
+  const vulnScanMutation = useMutation({
+    mutationFn: (jobId: string) => scanApi.runVulnScan(jobId),
+    onSuccess: () => {
+      toast.success('Vulnerability scan started')
+      queryClient.invalidateQueries({ queryKey: ['scans'] })
+    },
+    onError: (err) => toast.error(getApiError(err)),
   })
 
   const columns = useMemo(
@@ -260,10 +356,10 @@ export function ScansPage() {
         cell: (info) => <StatusBadge status={info.getValue()} />,
       }),
       columnHelper.accessor('current_stage', {
-        header: 'Current Stage',
+        header: 'Stage',
         cell: (info) => (
           <span className="text-sm text-neutral-400">
-            {info.getValue() ? info.getValue()!.replace(/\d+_/, '').replace(/_/g, ' ') : '—'}
+            {info.getValue() ? info.getValue()!.replace(/\d+_/, '').replace(/_/g, ' ') : '\u2014'}
           </span>
         ),
       }),
@@ -280,13 +376,25 @@ export function ScansPage() {
       columnHelper.display({
         id: 'actions',
         cell: ({ row }) => (
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             <button
               onClick={() => setSelectedJob(row.original)}
               className="text-sm text-primary hover:text-primary"
             >
               View
             </button>
+            {(row.original.status === 'completed' || row.original.status === 'partial') && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  vulnScanMutation.mutate(row.original.id)
+                }}
+                className="text-sm text-amber-400 hover:text-amber-300"
+                title="Run vulnerability scan"
+              >
+                Vuln
+              </button>
+            )}
             {(row.original.status === 'running' || row.original.status === 'queued') && (
               <button
                 onClick={(e) => {
@@ -302,7 +410,7 @@ export function ScansPage() {
         ),
       }),
     ],
-    [cancelScan]
+    [cancelScan, vulnScanMutation]
   )
 
   const table = useReactTable({
@@ -324,15 +432,22 @@ export function ScansPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-light text-neutral-50">Scans</h1>
-          <p className="text-neutral-400 text-sm mt-1">Manage and monitor your reconnaissance scans</p>
+          <h1 className="text-2xl font-semibold text-neutral-100">Scans</h1>
+          <p className="text-sm text-neutral-400 mt-1">Manage and monitor your reconnaissance scans</p>
         </div>
-        <button
-          onClick={() => setShowNewScan(true)}
-          className="px-4 py-2 bg-primary text-sidebar-bg hover:bg-primary/90 rounded-lg transition-colors text-sm"
-        >
-          + New Scan
-        </button>
+        <div className="flex items-center gap-2">
+          {selectedProject && (
+            <Badge variant="outline" className="text-neutral-400 text-xs">
+              {selectedProject.name}
+            </Badge>
+          )}
+          <Button
+            onClick={() => setShowNewScan(true)}
+            className="bg-primary text-sidebar-bg hover:bg-primary/90 gap-2"
+          >
+            + New Scan
+          </Button>
+        </div>
       </div>
 
       <div className="mb-4">
@@ -347,11 +462,23 @@ export function ScansPage() {
 
       <ErrorBoundary>
       {isLoading ? (
-        <div className="bg-neutral-900 rounded-lg border border-neutral-800 overflow-hidden">
+        <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
           <SkeletonTable rows={6} cols={6} />
         </div>
+      ) : table.getRowModel().rows.length === 0 ? (
+        <div className="bg-neutral-900 border border-neutral-800 rounded-lg">
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <RocketLaunch className="h-6 w-6" />
+              </EmptyMedia>
+              <EmptyTitle>No scans yet</EmptyTitle>
+              <EmptyDescription>Start your first scan to begin discovering assets and vulnerabilities.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        </div>
       ) : (
-      <div className="bg-neutral-900 rounded-lg border border-neutral-800 overflow-hidden">
+      <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -364,21 +491,14 @@ export function ScansPage() {
                       onClick={header.column.getToggleSortingHandler()}
                     >
                       {flexRender(header.column.columnDef.header, header.getContext())}
-                      {{ asc: ' ↑', desc: ' ↓' }[header.column.getIsSorted() as string] ?? null}
+                      {{ asc: ' \u2191', desc: ' \u2193' }[header.column.getIsSorted() as string] ?? null}
                     </th>
                   ))}
                 </tr>
               ))}
             </thead>
             <tbody>
-              {table.getRowModel().rows.length === 0 ? (
-                <tr>
-                  <td colSpan={columns.length} className="text-center py-12 text-neutral-400">
-                    No scans yet. Start your first scan!
-                  </td>
-                </tr>
-              ) : (
-                table.getRowModel().rows.map((row) => (
+                {table.getRowModel().rows.map((row) => (
                   <tr
                     key={row.id}
                     className="border-b border-neutral-800/50 hover:bg-neutral-800/30 cursor-pointer"
@@ -390,8 +510,7 @@ export function ScansPage() {
                       </td>
                     ))}
                   </tr>
-                ))
-              )}
+                ))}
             </tbody>
           </table>
         </div>

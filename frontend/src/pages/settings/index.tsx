@@ -4,6 +4,7 @@ import { useChangePassword, useApiKeys } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import {
   Dialog,
   DialogContent,
@@ -341,13 +342,15 @@ function ApiKeysSection() {
             ))}
           </div>
         ) : (
-          <div className="text-center py-8">
-            <Key className="h-8 w-8 text-neutral-600 mx-auto mb-2" />
-            <p className="text-sm text-neutral-500">No API keys yet</p>
-            <p className="text-xs text-neutral-600 mt-1">
-              Create a key to use the Reconny API programmatically
-            </p>
-          </div>
+          <Empty variant="inline">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Key className="h-5 w-5" />
+              </EmptyMedia>
+              <EmptyTitle>No API keys yet</EmptyTitle>
+              <EmptyDescription>Create a key to use the Reconny API programmatically.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         )}
       </CardContent>
     </Card>

@@ -54,6 +54,11 @@ def run_async(coro):
     return loop.run_until_complete(coro)
 
 
+# Stage names that should be skipped when their config toggle is False
+CONFIG_SKIP_STAGES = {
+    PipelineStage.VULN_SCAN: "vuln_scan",
+}
+
 STAGE_CLASS_MAP = {
     PipelineStage.SUBDOMAIN_ENUM: SubdomainEnumStage,
     PipelineStage.LIVE_PROBE: LiveProbeStage,
@@ -171,6 +176,21 @@ def execute_full_pipeline(self, job_id: str):
             is_last = (idx == stage_count - 1)
             
             stage_progress = (idx / stage_count) * 100
+            
+            config_key = CONFIG_SKIP_STAGES.get(stage)
+            if config_key:
+                async with async_session_factory() as session:
+                    s_result = await session.execute(
+                        select(ScanJob).where(ScanJob.id == job_id)
+                    )
+                    s_job = s_result.scalar_one_or_none()
+                    config = s_job.scan_config or {} if s_job else {}
+                    if not config.get(config_key, True):
+                        logger.info("stage_skipped_by_config", job_id=job_id, stage=stage.value, config_key=config_key)
+                        run_async(_emit_pipeline_event(job_id, "stage_skipped", {"stage": stage.value}))
+                        run_async(_update_job_progress(job_id, stage, ((idx + 1) / stage_count) * 100))
+                        continue
+            
             run_async(_emit_pipeline_event(
                 job_id, "stage_started",
                 {"stage": stage.value, "stage_index": idx, "total_stages": stage_count},
@@ -437,6 +457,18 @@ async def _save_results_to_db(job_id: str):
             
     except Exception as e:
         logger.error("save_results_failed", job_id=job_id, error=str(e))
+
+
+@celery_app.task(name="execute_vuln_scan_full", bind=True, max_retries=2, default_retry_delay=30)
+def execute_vuln_scan_full(self, job_id: str):
+    result = execute_scan_stage(job_id, PipelineStage.VULN_SCAN.value)
+    if result.get("success"):
+        run_async(_save_results_to_db(job_id))
+        run_async(_finalize_job(job_id, ScanStatus.COMPLETED))
+        run_async(_emit_pipeline_event(job_id, "pipeline_completed", {}))
+    else:
+        run_async(_finalize_job(job_id, ScanStatus.PARTIAL, result.get("error")))
+    return result
 
 
 @celery_app.task(name="cleanup_expired_jobs", bind=True)

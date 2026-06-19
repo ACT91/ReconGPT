@@ -12,6 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from '@/components/ui/empty'
 import { Plus, Trash, Pencil, Folder, Crosshair } from '@phosphor-icons/react'
 import toast from 'react-hot-toast'
 import type { Project, ProjectCreate, ScanJob } from '@/types'
@@ -295,17 +296,22 @@ export function ProjectsPage() {
         {isLoading ? (
           <SkeletonCardGrid count={6} />
         ) : projects.length === 0 ? (
-          <div className="text-center py-20">
-            <Folder className="h-12 w-12 text-neutral-700 mx-auto mb-4" />
-            <p className="text-lg text-neutral-400">No projects yet</p>
-            <p className="text-sm text-neutral-600 mt-1">Create your first project to start organizing scans</p>
-            <Button
-              onClick={() => setShowCreate(true)}
-              className="mt-4 bg-primary text-sidebar-bg hover:bg-primary/90/90 gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              Create Project
-            </Button>
+          <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg">
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <Folder className="h-6 w-6" />
+                </EmptyMedia>
+                <EmptyTitle>No projects yet</EmptyTitle>
+                <EmptyDescription>Create your first project to start organizing scans.</EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                <Button onClick={() => setShowCreate(true)} className="bg-primary text-sidebar-bg hover:bg-primary/90 gap-2">
+                  <Plus className="h-4 w-4" />
+                  Create Project
+                </Button>
+              </EmptyContent>
+            </Empty>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import {
   Scan,
   Globe,
@@ -193,10 +194,15 @@ export function Dashboard() {
           </div>
           <div>
             {!d?.recent_findings || d.recent_findings.length === 0 ? (
-              <div className="p-10 text-center">
-                <Shield className="h-8 w-8 text-neutral-700 mx-auto mb-2" />
-                <p className="text-sm text-neutral-500">No findings yet. Start a scan to discover vulnerabilities.</p>
-              </div>
+              <Empty variant="inline">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <Shield className="h-5 w-5" />
+                  </EmptyMedia>
+                  <EmptyTitle>No findings yet</EmptyTitle>
+                  <EmptyDescription>Start a scan to discover vulnerabilities.</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             ) : (
               d.recent_findings.map((f) => (
                 <div

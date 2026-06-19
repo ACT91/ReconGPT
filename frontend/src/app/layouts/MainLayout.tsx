@@ -1,6 +1,6 @@
 import { Outlet } from 'react-router-dom'
 import { useState } from 'react'
-import { ErrorBoundary } from '@/components/common'
+import { ErrorBoundary, ProjectSelector, DropdownMenuAvatar } from '@/components/common'
 import { SidebarNav } from '@/components/layouts/SidebarNav'
 import { List, X } from '@phosphor-icons/react'
 
@@ -9,7 +9,7 @@ export function MainLayout() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
 
   return (
-    <div className="min-h-screen flex bg-sidebar-bg">
+    <div className="h-screen overflow-hidden flex bg-sidebar-bg">
       {/* Mobile sidebar backdrop */}
       {mobileSidebarOpen && (
         <div
@@ -29,7 +29,7 @@ export function MainLayout() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-40 flex flex-col bg-sidebar-bg border-r border-neutral-800 transition-all duration-300 ${
+        className={`fixed lg:static inset-y-0 left-0 z-40 flex flex-col bg-sidebar-bg border-r border-neutral-800 transition-all duration-300 overflow-y-auto ${
           mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         } ${sidebarCollapsed ? 'w-[72px]' : 'w-[260px]'}`}
       >
@@ -40,9 +40,12 @@ export function MainLayout() {
               <span className="text-sidebar-bg font-bold text-sm">R</span>
             </div>
             {!sidebarCollapsed && (
-              <span className="font-semibold text-[15px] text-neutral-100 tracking-tight">
-                Reconny
-              </span>
+              <div className="flex flex-col">
+                <span className="font-semibold text-[15px] text-neutral-100 tracking-tight">
+                  Reconny
+                </span>
+                <ProjectSelector />
+              </div>
             )}
           </div>
           {!sidebarCollapsed && (
@@ -69,8 +72,11 @@ export function MainLayout() {
       </aside>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col min-h-screen lg:ml-0">
-        <main className="flex-1 p-4 md:p-6 bg-background">
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="flex items-center justify-end h-14 px-4 md:px-6 border-b border-neutral-800 bg-sidebar-bg shrink-0">
+          <DropdownMenuAvatar />
+        </header>
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-background">
           <ErrorBoundary>
             <Outlet />
           </ErrorBoundary>

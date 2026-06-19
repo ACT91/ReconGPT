@@ -31,7 +31,7 @@ from app.schemas.scan import (
 )
 from app.schemas.common import PaginationParams
 from app.api.deps import get_current_user, get_current_active_user, get_current_user_ws, rate_limit_scan, rate_limit, check_scan_concurrency
-from app.tasks.scan_tasks import execute_full_pipeline
+from app.tasks.scan_tasks import execute_full_pipeline, execute_vuln_scan_full
 from app.services.scan import ScanService
 from app.core.logger import get_logger
 from app.core.websocket_manager import manager
@@ -300,6 +300,47 @@ async def get_scan_vulnerabilities(
         "page_size": pagination.page_size,
         "total_pages": (total + pagination.page_size - 1) // pagination.page_size,
     }
+
+
+@router.post("/{job_id}/vuln-scan", response_model=ScanStartResponse, status_code=status.HTTP_202_ACCEPTED)
+async def trigger_vuln_scan(
+    job_id: UUID,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+    _rate_limit: None = Depends(rate_limit_scan),
+):
+    scan_service = ScanService(db)
+    job = await scan_service.get_scan_job(job_id, current_user.id)
+
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Scan job not found",
+        )
+
+    if job.status not in [ScanStatus.COMPLETED, ScanStatus.PARTIAL, ScanStatus.QUEUED, ScanStatus.RUNNING]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot run vulnerability scan on a {job.status.value} job",
+        )
+
+    job.status = ScanStatus.QUEUED
+    await db.commit()
+
+    execute_vuln_scan_full.delay(str(job.id))
+
+    logger.info(
+        "vuln_scan_triggered",
+        user_id=str(current_user.id),
+        job_id=str(job_id),
+    )
+
+    return ScanStartResponse(
+        job_id=job.id,
+        status=job.status,
+        target_domain=job.target_domain,
+        message="Vulnerability scan queued",
+    )
 
 
 @router.post("/{job_id}/cancel", response_model=dict)
