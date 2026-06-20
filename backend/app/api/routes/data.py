@@ -1,7 +1,7 @@
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, desc, asc, or_, and_, case
+from sqlalchemy import select, func, desc, asc, or_, and_, case, cast, String as SA_String
 from sqlalchemy.orm import selectinload
 from uuid import UUID
 from datetime import datetime, timezone
@@ -136,7 +136,7 @@ async def list_endpoints(
         )
 
     if source:
-        query = query.where(Endpoint.source == source)
+        query = query.where(cast(Endpoint.source, SA_String) == source)
 
     if method:
         query = query.where(func.lower(Endpoint.method) == method.lower())
@@ -296,7 +296,7 @@ async def list_insights(
             )
         )
 
-    query = query.where(AiInsight.is_dismissed.is_(False))
+    query = query.where(AiInsight.is_dismissed == 0)
 
     count_query = select(func.count()).select_from(query.subquery())
     total_result = await db.execute(count_query)
@@ -366,7 +366,7 @@ async def get_global_stats(
     insight_count = await db.execute(
         select(func.count(AiInsight.id)).where(
             AiInsight.scan_job_id.in_(job_ids),
-            AiInsight.is_dismissed.is_(False),
+            AiInsight.is_dismissed == 0,
         )
     )
     scan_count = await db.execute(

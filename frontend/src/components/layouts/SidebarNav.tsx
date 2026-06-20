@@ -9,7 +9,6 @@ import {
   WarningCircle,
   Robot,
   FileText,
-  Gear,
   CaretDown,
   CaretRight,
 } from '@phosphor-icons/react'
@@ -82,11 +81,6 @@ function SidebarNavContent({ isCollapsed }: SidebarNavProps) {
       href: '/reports',
       label: 'Reports',
       icon: FileText,
-    },
-    {
-      href: '/settings',
-      label: 'Settings',
-      icon: Gear,
     },
   ]
 

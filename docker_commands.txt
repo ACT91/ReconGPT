@@ -1,0 +1,133 @@
+====================================================================
+  RECONGPT — DOCKER COMMANDS REFERENCE
+====================================================================
+
+Prerequisites: Docker + Docker Compose installed.
+Run all commands from the project root directory.
+
+====================================================================
+1. FIRST TIME SETUP
+====================================================================
+
+  docker compose up -d
+
+  Starts all services in detached mode (postgres, redis, frontend,
+  backend, worker, worker-low, beat, flower, migration).
+  The migration container runs alembic migrations automatically
+  on startup, then exits.
+
+--------------------------------------------------------------------
+2. NORMAL START / STOP
+--------------------------------------------------------------------
+
+  docker compose start        # Start all stopped containers
+  docker compose stop         # Stop all containers (preserves data)
+  docker compose down         # Stop + remove containers (preserves volumes)
+  docker compose down -v      # STOP! Wipes all volumes (DB, Redis, storage)
+
+--------------------------------------------------------------------
+3. REBUILD A SINGLE SERVICE AFTER CODE CHANGES
+--------------------------------------------------------------------
+
+  # Backend (API server)
+  docker compose up -d --build backend
+  # Fixes: 500 errors, new/modified API endpoints, logic changes
+
+  # Backend workers (Celery)
+  docker compose up -d --build worker worker-low beat
+  # Fixes: scan pipeline failures, task processing issues
+
+  # Full backend rebuild (API + workers + beat)
+  docker compose up -d --build backend worker worker-low beat
+
+  # Frontend (React app)
+  docker compose up -d --build frontend
+  # Fixes: UI changes not reflecting, new components/pages
+
+  # Everything
+  docker compose up -d --build
+
+--------------------------------------------------------------------
+4. PROBLEM: "Socket hang up" or "Connection refused" after restart
+--------------------------------------------------------------------
+
+  Cause: Backend restarted but database schema is out of date
+  (new migrations haven't run).
+
+  docker compose run --rm migration
+
+  Runs alembic upgrade head. The migration container connects to
+  postgres, applies pending migrations, then exits.
+
+  If that doesn't help, check that postgres is actually healthy:
+  docker compose ps
+
+--------------------------------------------------------------------
+5. VIEW LOGS
+--------------------------------------------------------------------
+
+  docker compose logs -f backend        # Follow backend logs
+  docker compose logs -f frontend       # Follow frontend logs
+  docker compose logs -f worker         # Follow worker logs
+  docker compose logs -f postgres       # Follow database logs
+  docker compose logs -f backend --tail=50  # Last 50 lines
+
+--------------------------------------------------------------------
+6. ACCESS DATABASE DIRECTLY
+--------------------------------------------------------------------
+
+  docker compose exec postgres psql -U reconny -d reconny
+
+  Useful for: checking if duplicate projects exist, debugging data.
+
+--------------------------------------------------------------------
+7. ACCESS BACKEND SHELL
+--------------------------------------------------------------------
+
+  docker compose exec backend sh
+  # From inside: run python scripts, check env vars, etc.
+
+--------------------------------------------------------------------
+8. CLEAN UP (DISK SPACE)
+--------------------------------------------------------------------
+
+  docker compose down             # Stop containers
+  docker system prune -f          # Remove unused images/networks
+  docker compose up -d            # Rebuild fresh
+
+  # Full cleanup (WARNING: deletes all data):
+  docker compose down -v
+  docker system prune -a -f
+  docker compose up -d
+
+--------------------------------------------------------------------
+9. COMMON ERRORS & FIXES QUICK REFERENCE
+--------------------------------------------------------------------
+
+  ERROR                               FIX
+  ----------------------------------  ----------------------------------
+  500 / "Internal Server Error"       docker compose up -d --build backend
+
+  "Database error occurred"           docker compose run --rm migration
+
+  Socket hang up / ECONNRESET         docker compose run --rm migration
+                                      (or restart backend: docker compose
+                                      restart backend)
+
+  Changes not showing in UI           docker compose up -d --build frontend
+
+  "Project already exists" fix        Already applied — rebuild backend
+
+  Worker not processing tasks         docker compose up -d --build worker
+
+  Can't connect to postgres           docker compose restart postgres
+                                      or check: docker compose logs postgres
+
+  All services down                   docker compose up -d
+
+  Port already in use                  Check if another service is on that
+                                      port (e.g. local nginx on :80).
+                                      Stop the conflicting service or
+                                      change ports in docker-compose.yml.
+
+====================================================================

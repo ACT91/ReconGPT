@@ -17,14 +17,14 @@ import { useScanWebSocket } from '@/hooks/useScanWebSocket'
 import { ScanProgressBar, StatusBadge, LiveLogsViewer, SkeletonTable, ErrorBoundary } from '@/components/common'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import type { ScanJob, ScanProgress, ScanLogEntry, Project } from '@/types'
-import { Globe, Network, WarningCircle, Robot, FileText, FloppyDisk, RocketLaunch } from '@phosphor-icons/react'
+import { Globe, Network, WarningCircle, Robot, FileText, FloppyDisk, RocketLaunch, Trash, Warning } from '@phosphor-icons/react'
 import toast from 'react-hot-toast'
 
 const columnHelper = createColumnHelper<ScanJob>()
@@ -101,6 +101,13 @@ function NewScanModal({
             />
           </div>
 
+          <Checkbox
+            id="run-vuln-scan"
+            checked={runVulnScan}
+            onChange={(e) => setRunVulnScan(e.target.checked)}
+            label="Run vulnerability scan (takes longer)"
+          />
+
           <div className="space-y-2">
             <Label htmlFor="project-select">Project (optional)</Label>
             <Select
@@ -111,13 +118,6 @@ function NewScanModal({
               options={projects.map((p: Project) => ({ value: p.id, label: p.name }))}
             />
           </div>
-
-          <Checkbox
-            id="run-vuln-scan"
-            checked={runVulnScan}
-            onChange={(e) => setRunVulnScan(e.target.checked)}
-            label="Run vulnerability scan (takes longer)"
-          />
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
@@ -308,6 +308,7 @@ function ScanDetailPanel({ job, onClose }: { job: ScanJob; onClose: () => void }
 export function ScansPage() {
   const [showNewScan, setShowNewScan] = useState(false)
   const [selectedJob, setSelectedJob] = useState<ScanJob | null>(null)
+  const [deletingJob, setDeletingJob] = useState<ScanJob | null>(null)
   const [sorting, setSorting] = useState<SortingState>([{ id: 'created_at', desc: true }])
   const [globalFilter, setGlobalFilter] = useState('')
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
@@ -336,6 +337,15 @@ export function ScansPage() {
     onSuccess: () => {
       toast.success('Vulnerability scan started')
       queryClient.invalidateQueries({ queryKey: ['scans'] })
+    },
+    onError: (err) => toast.error(getApiError(err)),
+  })
+
+  const deleteScan = useMutation({
+    mutationFn: (jobId: string) => scanApi.delete(jobId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scans'] })
+      toast.success('Scan deleted')
     },
     onError: (err) => toast.error(getApiError(err)),
   })
@@ -401,6 +411,16 @@ export function ScansPage() {
                 Cancel
               </button>
             )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setDeletingJob(row.original)
+              }}
+              className="p-1 rounded text-neutral-500 hover:text-destructive hover:bg-destructive/10 transition-colors"
+              title="Delete scan"
+            >
+              <Trash className="h-3.5 w-3.5" />
+            </button>
           </div>
         ),
       }),
@@ -537,6 +557,44 @@ export function ScansPage() {
 
       <NewScanModal open={showNewScan} onClose={() => setShowNewScan(false)} />
       {selectedJob && <ScanDetailPanel job={selectedJob} onClose={() => setSelectedJob(null)} />}
+
+      {/* Delete Scan Confirmation */}
+      <Dialog open={!!deletingJob} onOpenChange={(open) => !open && setDeletingJob(null)}>
+        <DialogContent className="bg-neutral-900 border-neutral-800 sm:max-w-md">
+          <DialogHeader>
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 mb-4">
+              <Warning className="h-6 w-6 text-destructive" />
+            </div>
+            <DialogTitle className="text-center text-neutral-100">Delete Scan</DialogTitle>
+            <DialogDescription className="text-center text-neutral-400">
+              Are you sure you want to delete the scan for <strong className="text-neutral-200">{deletingJob?.target_domain}</strong>? This will permanently delete all associated findings, endpoints, and data. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setDeletingJob(null)}
+              className="text-neutral-300 border-neutral-700"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (deletingJob) {
+                  deleteScan.mutate(deletingJob.id)
+                  setDeletingJob(null)
+                }
+              }}
+              disabled={deleteScan.isPending}
+              className="gap-2"
+            >
+              <Trash className="h-4 w-4" />
+              {deleteScan.isPending ? 'Deleting...' : 'Delete Scan'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

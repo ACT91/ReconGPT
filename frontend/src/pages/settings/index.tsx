@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAuthStore } from '@/store/auth'
 import { useChangePassword, useApiKeys } from '@/hooks/useAuth'
 import { authApi, getApiError } from '@/services/api'
+import { AxiosError } from 'axios'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -15,60 +16,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Key, Plus, Trash, Copy, Check, Eye, EyeSlash, User, Lock, ShieldCheck, DownloadSimple, Warning } from '@phosphor-icons/react'
+import { Key, Plus, Trash, Copy, Check, Eye, EyeSlash, Lock, ShieldCheck, DownloadSimple, Warning, Bell, Scan, WarningCircle, FileText } from '@phosphor-icons/react'
 import toast from 'react-hot-toast'
 import type { APIKeyFull } from '@/types'
-
-function ProfileSection() {
-  const user = useAuthStore((s) => s.user)
-
-  return (
-    <Card className="bg-neutral-900/50 border-neutral-800">
-      <CardHeader>
-        <CardTitle className="text-neutral-100">Profile</CardTitle>
-        <CardDescription className="text-neutral-400">Your account information</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="text-sm text-neutral-400">Full Name</label>
-            <Input
-              value={user?.full_name || ''}
-              readOnly
-              className="bg-neutral-800/50 border-neutral-700 text-neutral-300"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm text-neutral-400">Email</label>
-            <Input
-              value={user?.email || ''}
-              readOnly
-              className="bg-neutral-800/50 border-neutral-700 text-neutral-300"
-            />
-          </div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="text-sm text-neutral-400">Role</label>
-            <Input
-              value={user?.role || ''}
-              readOnly
-              className="bg-neutral-800/50 border-neutral-700 text-neutral-300 capitalize"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm text-neutral-400">Member Since</label>
-            <Input
-              value={user?.created_at ? new Date(user.created_at).toLocaleDateString() : ''}
-              readOnly
-              className="bg-neutral-800/50 border-neutral-700 text-neutral-300"
-            />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
 
 function ChangePasswordSection() {
   const [currentPassword, setCurrentPassword] = useState('')
@@ -97,8 +47,8 @@ function ChangePasswordSection() {
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
-    } catch {
-      toast.error('Failed to change password')
+    } catch (err) {
+      toast.error(getApiError(err))
     }
   }
 
@@ -491,20 +441,106 @@ function DataPrivacySection() {
   )
 }
 
+const notificationTypes = [
+  {
+    id: 'scan-completed',
+    icon: Scan,
+    title: 'Scan Completed',
+    description: 'Get notified when a reconnaissance scan finishes',
+    enabled: true,
+  },
+  {
+    id: 'vuln-found',
+    icon: WarningCircle,
+    title: 'Vulnerabilities Found',
+    description: 'Alerts when new vulnerabilities are discovered in your scans',
+    enabled: true,
+  },
+  {
+    id: 'ai-insights',
+    icon: ShieldCheck,
+    title: 'AI Insights Ready',
+    description: 'Notification when AI analysis and risk scoring is complete',
+    enabled: false,
+  },
+  {
+    id: 'report-ready',
+    icon: FileText,
+    title: 'Reports Available',
+    description: 'Let you know when generated reports are ready for download',
+    enabled: false,
+  },
+]
+
+function NotificationToggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+        checked ? 'bg-primary' : 'bg-neutral-700'
+      }`}
+    >
+      <span
+        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ease-in-out ${
+          checked ? 'translate-x-4' : 'translate-x-0'
+        }`}
+      />
+    </button>
+  )
+}
+
+function NotificationsSection() {
+  return (
+    <Card className="bg-neutral-900/50 border-neutral-800">
+      <CardHeader>
+        <CardTitle className="text-neutral-100">Notifications</CardTitle>
+        <CardDescription className="text-neutral-400">
+          Choose which events you want to be notified about
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-0 divide-y divide-neutral-800/50">
+        {notificationTypes.map((item) => {
+          const Icon = item.icon
+          return (
+            <div key={item.id} className="flex items-center justify-between py-4 first:pt-0 last:pb-0">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-lg bg-neutral-800">
+                  <Icon className="h-4 w-4 text-neutral-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-neutral-200">{item.title}</p>
+                  <p className="text-xs text-neutral-500 mt-0.5">{item.description}</p>
+                </div>
+              </div>
+              <NotificationToggle
+                checked={item.enabled}
+                onChange={() => {}}
+              />
+            </div>
+          )
+        })}
+      </CardContent>
+    </Card>
+  )
+}
+
 export function SettingsPage() {
   const tabs = [
-    { id: 'profile', label: 'Profile', icon: User },
     { id: 'password', label: 'Change Password', icon: Lock },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'api-keys', label: 'API Keys', icon: Key },
     { id: 'privacy', label: 'Privacy & Data', icon: ShieldCheck },
   ]
-  const [activeTab, setActiveTab] = useState('profile')
+  const [activeTab, setActiveTab] = useState('password')
 
   return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-neutral-100">Settings</h1>
-        <p className="text-sm text-neutral-400 mt-1">Manage your account and API keys</p>
+        <p className="text-sm text-neutral-400 mt-1">Manage your account security and preferences</p>
       </div>
 
       <div className="flex gap-1 mb-6 border-b border-neutral-800">
@@ -527,8 +563,8 @@ export function SettingsPage() {
         })}
       </div>
 
-      {activeTab === 'profile' && <ProfileSection />}
       {activeTab === 'password' && <ChangePasswordSection />}
+      {activeTab === 'notifications' && <NotificationsSection />}
       {activeTab === 'api-keys' && <ApiKeysSection />}
       {activeTab === 'privacy' && <DataPrivacySection />}
     </div>

@@ -384,6 +384,28 @@ async def cancel_scan(
     return {"message": "Scan cancelled successfully", "job_id": str(job_id)}
 
 
+@router.delete("/{job_id}", response_model=dict)
+async def delete_scan(
+    job_id: UUID,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+    _rate_limit: None = Depends(rate_limit),
+):
+    scan_service = ScanService(db)
+    success = await scan_service.delete_scan_job(job_id, current_user.id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Scan job not found",
+        )
+    logger.info(
+        "scan_deleted",
+        user_id=str(current_user.id),
+        job_id=str(job_id),
+    )
+    return {"message": "Scan deleted successfully"}
+
+
 @router.post("/{job_id}/retry", response_model=ScanStartResponse)
 async def retry_scan(
     job_id: UUID,

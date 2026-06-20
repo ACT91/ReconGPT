@@ -6,6 +6,7 @@ from app.schemas.auth import (
     RegisterRequest,
     RefreshTokenRequest,
     PasswordChangeRequest,
+    UserUpdate,
     Token,
     UserResponse,
     APIKeyCreate,
@@ -98,6 +99,21 @@ async def get_me(
     return current_user
 
 
+@router.patch("/me", response_model=UserResponse)
+async def update_me(
+    update_data: UserUpdate,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    patch_data = update_data.model_dump(exclude_unset=True)
+    for field, value in patch_data.items():
+        setattr(current_user, field, value)
+    await db.commit()
+    await db.refresh(current_user)
+    logger.info("user_profile_updated", user_id=str(current_user.id))
+    return current_user
+
+
 @router.post("/change-password", response_model=dict)
 async def change_password(
     request: PasswordChangeRequest,
@@ -106,11 +122,17 @@ async def change_password(
 ):
     auth_service = AuthService(db)
     
-    success = await auth_service.change_password(
-        current_user.id,
-        request.current_password,
-        request.new_password,
-    )
+    try:
+        success = await auth_service.change_password(
+            current_user.id,
+            request.current_password,
+            request.new_password,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
     
     if not success:
         raise HTTPException(

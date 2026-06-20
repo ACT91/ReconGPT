@@ -13,6 +13,7 @@ import {
   AIAnalysisPage,
   ReportsPage,
   SettingsPage,
+  ProfilePage,
 } from '@/pages'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { RegisterPage } from '@/pages/auth/RegisterPage'
@@ -70,6 +71,7 @@ export function AppRouter() {
         <Route path="/ai-analysis/:scanId" element={<AIAnalysisPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/reports/:scanId" element={<ReportsPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
 

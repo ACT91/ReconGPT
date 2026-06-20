@@ -35,6 +35,18 @@ async def create_project(
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = Depends(rate_limit),
 ):
+    existing = await db.execute(
+        select(Project).where(
+            Project.owner_id == current_user.id,
+            Project.name == project_data.name,
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"A project named '{project_data.name}' already exists",
+        )
+    
     project = Project(
         owner_id=current_user.id,
         name=project_data.name,
@@ -188,6 +200,20 @@ async def update_project(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found",
         )
+    
+    if "name" in project_data.model_dump(exclude_unset=True):
+        existing = await db.execute(
+            select(Project).where(
+                Project.owner_id == current_user.id,
+                Project.name == project_data.name,
+                Project.id != project_id,
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"A project named '{project_data.name}' already exists",
+            )
     
     update_data = project_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():

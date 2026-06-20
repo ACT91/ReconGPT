@@ -401,6 +401,15 @@ class ScanService:
         await self.db.commit()
         return True
 
+    async def delete_scan_job(self, job_id: UUID, user_id: UUID) -> bool:
+        job = await self.get_scan_job(job_id, user_id)
+        if not job:
+            return False
+        await self.db.delete(job)
+        await self.db.commit()
+        logger.info("scan_deleted", user_id=str(user_id), job_id=str(job_id))
+        return True
+
     async def retry_scan_job(self, old_job: ScanJob) -> ScanJob:
         new_job = ScanJob(
             owner_id=old_job.owner_id,

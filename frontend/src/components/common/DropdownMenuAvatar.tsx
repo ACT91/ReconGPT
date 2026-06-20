@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { User, Gear, Bell, SignOut, CaretUpDown, Moon, Sun } from '@phosphor-icons/react'
+import { User, Gear, SignOut, CaretUpDown, Moon, Sun } from '@phosphor-icons/react'
 import { useAuthStore } from '@/store/auth'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -69,17 +69,13 @@ export function DropdownMenuAvatar({ isCollapsed = false }: { isCollapsed?: bool
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem onClick={() => navigate('/settings')} className="gap-2">
+          <DropdownMenuItem onClick={() => navigate('/profile')} className="gap-2">
             <User className="h-4 w-4 text-neutral-500" />
-            Account
+            Profile
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => navigate('/settings')} className="gap-2">
             <Gear className="h-4 w-4 text-neutral-500" />
             Settings
-          </DropdownMenuItem>
-          <DropdownMenuItem className="gap-2">
-            <Bell className="h-4 w-4 text-neutral-500" />
-            Notifications
           </DropdownMenuItem>
           <DropdownMenuItem onClick={toggleTheme} className="gap-2">
             {isDark ? <Sun className="h-4 w-4 text-neutral-500" /> : <Moon className="h-4 w-4 text-neutral-500" />}

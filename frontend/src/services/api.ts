@@ -100,6 +100,9 @@ export const authApi = {
 
   me: () => api.get<User>('/auth/me').then((r) => r.data),
 
+  updateProfile: (data: { full_name?: string }) =>
+    api.patch<User>('/auth/me', data).then((r) => r.data),
+
   changePassword: (current_password: string, new_password: string) =>
     api.post('/auth/change-password', { current_password, new_password }).then((r) => r.data),
 
@@ -175,6 +178,9 @@ export const scanApi = {
 
   runVulnScan: (jobId: string) =>
     api.post<ScanResponse>(`/scans/${jobId}/vuln-scan`).then((r) => r.data),
+
+  delete: (jobId: string) =>
+    api.delete(`/scans/${jobId}`).then((r) => r.data),
 }
 
 export const resultApi = {

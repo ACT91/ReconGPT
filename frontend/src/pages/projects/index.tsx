@@ -13,7 +13,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from '@/components/ui/empty'
-import { Plus, Trash, Pencil, Folder, Crosshair } from '@phosphor-icons/react'
+import { Plus, Trash, Pencil, Folder, Crosshair, Warning } from '@phosphor-icons/react'
 import toast from 'react-hot-toast'
 import type { Project, ProjectCreate, ScanJob } from '@/types'
 import { useNavigate } from 'react-router-dom'
@@ -218,6 +218,7 @@ function ProjectForm({
 export function ProjectsPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [editingProject, setEditingProject] = useState<Project | null>(null)
+  const [deletingProject, setDeletingProject] = useState<Project | null>(null)
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
@@ -256,8 +257,14 @@ export function ProjectsPage() {
   })
 
   const handleDelete = (id: string) => {
-    if (!window.confirm('Delete this project and all associated data? This cannot be undone.')) return
-    deleteMutation.mutate(id)
+    const project = projects.find((p) => p.id === id) || null
+    setDeletingProject(project)
+  }
+
+  const confirmDelete = () => {
+    if (!deletingProject) return
+    deleteMutation.mutate(deletingProject.id)
+    setDeletingProject(null)
   }
 
   const projects = data?.items || []
@@ -326,6 +333,39 @@ export function ProjectsPage() {
           </div>
         )}
       </ErrorBoundary>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deletingProject} onOpenChange={(open) => !open && setDeletingProject(null)}>
+        <DialogContent className="bg-neutral-900 border-neutral-800 sm:max-w-md">
+          <DialogHeader>
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 mb-4">
+              <Warning className="h-6 w-6 text-destructive" />
+            </div>
+            <DialogTitle className="text-center text-neutral-100">Delete Project</DialogTitle>
+            <DialogDescription className="text-center text-neutral-400">
+              Are you sure you want to delete <strong className="text-neutral-200">{deletingProject?.name}</strong>? This will permanently delete the project and all associated scans, findings, and data. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setDeletingProject(null)}
+              className="text-neutral-300 border-neutral-700"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={deleteMutation.isPending}
+              className="gap-2"
+            >
+              <Trash className="h-4 w-4" />
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete Project'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={!!editingProject} onOpenChange={(open) => !open && setEditingProject(null)}>
