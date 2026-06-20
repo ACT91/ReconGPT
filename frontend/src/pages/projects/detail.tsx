@@ -4,6 +4,10 @@ import { useQuery } from '@tanstack/react-query'
 import { projectApi, scanApi, getApiError } from '@/services/api'
 import { ErrorBoundary, StatusBadge, ScanProgressBar } from '@/components/common'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from '@/components/ui/empty'
 import { ArrowLeft, Globe, Network, WarningCircle, Crosshair, Play } from '@phosphor-icons/react'
 import toast from 'react-hot-toast'
@@ -42,8 +46,6 @@ function NewScanModal({
 
   const [isStarting, setIsStarting] = useState(false)
 
-  if (!open) return null
-
   const handleStart = async () => {
     if (!targetDomain.trim()) return
     setIsStarting(true)
@@ -65,57 +67,50 @@ function NewScanModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
-      <div
-        className="bg-neutral-900 rounded-lg border border-neutral-800 p-6 w-full max-w-md mx-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-lg font-semibold text-neutral-100 mb-4">New Scan for Project</h2>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
+        <DialogHeader>
+          <DialogTitle>New Scan for Project</DialogTitle>
+        </DialogHeader>
+
         {error && (
-          <div className="mb-4 p-3 rounded-lg bg-neutral-800/50 border border-neutral-700 text-neutral-300 text-sm">{error}</div>
+          <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+            {error}
+          </div>
         )}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-neutral-400 mb-2">Target Domain</label>
-          <input
-            type="text"
-            value={targetDomain}
-            onChange={(e) => setTargetDomain(e.target.value)}
-            className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-4 py-2.5 text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary/50"
-            placeholder="example.com"
-            required
-          />
-        </div>
-        <div className="mb-4 flex items-center gap-2">
-          <input
-            type="checkbox"
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="target-domain-project">Target Domain</Label>
+            <Input
+              id="target-domain-project"
+              type="text"
+              value={targetDomain}
+              onChange={(e) => setTargetDomain(e.target.value)}
+              placeholder="example.com"
+              required
+            />
+          </div>
+
+          <Checkbox
             id="run-vuln-scan-project"
             checked={runVulnScan}
             onChange={(e) => setRunVulnScan(e.target.checked)}
-            className="w-4 h-4 rounded border-neutral-700 bg-neutral-800 text-primary focus:ring-primary/50"
+            label="Run vulnerability scan (takes longer)"
           />
-          <label htmlFor="run-vuln-scan-project" className="text-sm text-neutral-400">
-            Run vulnerability scan (takes longer)
-          </label>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={handleStart} disabled={isStarting || !targetDomain.trim()}>
+              <Play className="h-4 w-4 mr-1" />
+              {isStarting ? 'Starting...' : 'Start Scan'}
+            </Button>
+          </DialogFooter>
         </div>
-        <div className="flex gap-2 justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg text-neutral-400 hover:text-neutral-200 transition-colors"
-          >
-            Cancel
-          </button>
-          <Button
-            onClick={handleStart}
-            disabled={isStarting || !targetDomain.trim()}
-            className="bg-primary text-sidebar-bg hover:bg-primary/90/90 gap-2"
-          >
-            <Play className="h-4 w-4" />
-            {isStarting ? 'Starting...' : 'Start Scan'}
-          </Button>
-        </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

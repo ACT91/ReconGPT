@@ -12,7 +12,7 @@ x-shared-environment: &shared-environment
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   LOG_FORMAT: ${LOG_FORMAT:-json}
   ENVIRONMENT: ${ENVIRONMENT:-development}
-  CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000","http://localhost:8000"]}
+  CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000","http://localhost:8000","http://localhost"]}
   SUBFINDER_PATH: /usr/local/bin/subfinder
   HTTPX_PATH: /usr/local/bin/httpx
   KATANA_PATH: /usr/local/bin/katana
@@ -54,6 +54,19 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: reconny-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - reconny
+    restart: unless-stopped
 
   backend:
     build:
@@ -139,6 +152,34 @@ services:
       retries: 3
     restart: unless-stopped
 
+  beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: reconny-beat
+    environment: *shared-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - storage_data:/app/storage
+      - log_data:/app/logs
+    networks:
+      - reconny
+    command: >
+      celery -A app.tasks.celery_app beat
+      --loglevel=info
+      --pidfile=/tmp/celerybeat.pid
+    healthcheck:
+      test: ["CMD-SHELL", "grep -q celery /proc/1/cmdline || exit 1"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    restart: unless-stopped
+
   flower:
     image: mher/flower:2.0
     container_name: reconny-flower
@@ -147,8 +188,8 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/2
       FLOWER_PORT: 5555
       FLOWER_BASIC_AUTH: ${FLOWER_USER:-admin}:${FLOWER_PASSWORD:-admin123}
-    ports:
-      - "5555:5555"
+    expose:
+      - "5555"
     depends_on:
       redis:
         condition: service_healthy

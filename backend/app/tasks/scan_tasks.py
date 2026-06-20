@@ -179,17 +179,12 @@ def execute_full_pipeline(self, job_id: str):
             
             config_key = CONFIG_SKIP_STAGES.get(stage)
             if config_key:
-                async with async_session_factory() as session:
-                    s_result = await session.execute(
-                        select(ScanJob).where(ScanJob.id == job_id)
-                    )
-                    s_job = s_result.scalar_one_or_none()
-                    config = s_job.scan_config or {} if s_job else {}
-                    if not config.get(config_key, True):
-                        logger.info("stage_skipped_by_config", job_id=job_id, stage=stage.value, config_key=config_key)
-                        run_async(_emit_pipeline_event(job_id, "stage_skipped", {"stage": stage.value}))
-                        run_async(_update_job_progress(job_id, stage, ((idx + 1) / stage_count) * 100))
-                        continue
+                stage_config = run_async(_get_job_config(job_id))
+                if not stage_config.get(config_key, True):
+                    logger.info("stage_skipped_by_config", job_id=job_id, stage=stage.value, config_key=config_key)
+                    run_async(_emit_pipeline_event(job_id, "stage_skipped", {"stage": stage.value}))
+                    run_async(_update_job_progress(job_id, stage, ((idx + 1) / stage_count) * 100))
+                    continue
             
             run_async(_emit_pipeline_event(
                 job_id, "stage_started",
@@ -249,6 +244,15 @@ def execute_full_pipeline(self, job_id: str):
         run_async(_finalize_job(job_id, ScanStatus.FAILED, str(e)))
         run_async(_emit_pipeline_event(job_id, "pipeline_failed", {"error": str(e)}))
         return {"success": False, "error": str(e)}
+
+
+async def _get_job_config(job_id: str) -> dict:
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(ScanJob).where(ScanJob.id == job_id)
+        )
+        job = result.scalar_one_or_none()
+        return job.scan_config or {} if job else {}
 
 
 async def _initialize_job(job_id: str):
@@ -385,7 +389,8 @@ async def _save_results_to_db(job_id: str):
                                 sd.probed_at = datetime.now(timezone.utc)
                                 from app.models.subdomain import SubdomainStatus
                                 sd.status = SubdomainStatus.ALIVE
-                        except json.JSONDecodeError:
+                        except json.JSONDecodeError as je:
+                            logger.warning("live_hosts_parse_failed", job_id=job_id, error=str(je), line=line[:200])
                             continue
             
             endpoints_file = storage_path / "endpoints_merged.txt"
@@ -442,7 +447,8 @@ async def _save_results_to_db(job_id: str):
                                     cvss_score=info.get("cvss-score"),
                                 )
                                 session.add(vuln)
-                            except Exception:
+                            except Exception as parse_err:
+                                logger.warning("nuclei_result_parse_failed", job_id=job_id, error=str(parse_err), line=line[:200])
                                 continue
             
             insights_file = storage_path / "ai_insights.json"

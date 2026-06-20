@@ -29,17 +29,24 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ):
     auth_service = AuthService(db)
-    
-    user = await auth_service.authenticate_user(request.email, request.password)
+
+    try:
+        user = await auth_service.authenticate_user(request.email, request.password)
+    except ValueError as lock_err:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail=str(lock_err),
+        )
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     tokens = await auth_service.create_tokens(user)
-    
+
     logger.info("login_success", user_id=str(user.id))
     return tokens
 
@@ -50,19 +57,20 @@ async def register(
     db: AsyncSession = Depends(get_db),
 ):
     auth_service = AuthService(db)
-    
+
     try:
         user = await auth_service.register_user(
             email=request.email,
             password=request.password,
             full_name=request.full_name,
+            accepted_tos=getattr(request, 'accepted_tos', False),
         )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
-    
+
     return user
 
 
@@ -185,3 +193,32 @@ async def logout(
     current_user: User = Depends(get_current_active_user),
 ):
     return {"message": "Logged out successfully"}
+
+
+@router.delete("/me", response_model=dict, status_code=status.HTTP_200_OK)
+async def delete_my_account(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """GDPR Article 17 — Right to Erasure."""
+    auth_service = AuthService(db)
+    success = await auth_service.delete_account(current_user.id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete account",
+        )
+    logger.info("user_account_deleted_gdpr", user_id=str(current_user.id))
+    return {"message": "Account deleted. Your personal data has been anonymised."}
+
+
+@router.get("/me/export", response_model=dict)
+async def export_my_data(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """GDPR Article 20 — Right to Data Portability."""
+    auth_service = AuthService(db)
+    data = await auth_service.export_account_data(current_user.id)
+    logger.info("user_data_exported_gdpr", user_id=str(current_user.id))
+    return data

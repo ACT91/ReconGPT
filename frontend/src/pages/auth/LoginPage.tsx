@@ -133,7 +133,8 @@ export function LoginPage() {
         </Card>
 
         <p className="mt-8 text-center text-xs text-muted-foreground/60">
-          &copy; {new Date().getFullYear()} Reconny. All rights reserved.
+          &copy; {new Date().getFullYear()} Reconny. All rights reserved.{' '}
+          <Link to="/privacy" className="hover:text-muted-foreground transition-colors">Privacy Policy</Link>
         </p>
       </div>
     </div>

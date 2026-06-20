@@ -10,35 +10,49 @@ import {
   type SortingState,
 } from '@tanstack/react-table'
 import { useQuery } from '@tanstack/react-query'
-import { dataApi } from '@/services/api'
+import { dataApi, projectApi } from '@/services/api'
 import { TechnologyBadges, SkeletonTable, ErrorBoundary } from '@/components/common'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { Select } from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
 import { useProjectStore } from '@/store/project'
-import type { Subdomain } from '@/types'
+import type { Subdomain, Project } from '@/types'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
-import { Download, MagnifyingGlass, Globe } from '@phosphor-icons/react'
+import { Download, Funnel, MagnifyingGlass, Globe } from '@phosphor-icons/react'
 
 const columnHelper = createColumnHelper<Subdomain & { scan_job_id?: string }>()
+
+type FilterMode = 'all' | 'scan_id' | 'project'
 
 export function AssetsPage() {
   const selectedProject = useProjectStore((s) => s.selectedProject)
   const [searchQuery, setSearchQuery] = useState('')
-  const [scanIdFilter, setScanIdFilter] = useState('')
+  const [filterMode, setFilterMode] = useState<FilterMode>('all')
+  const [scanIdValue, setScanIdValue] = useState('')
+  const [filterProjectId, setFilterProjectId] = useState('')
   const [filterAlive, setFilterAlive] = useState<'all' | 'alive' | 'dead'>('all')
   const [sorting, setSorting] = useState<SortingState>([{ id: 'name', desc: false }])
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 50 })
 
+  const { data: projectsData } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => projectApi.list({ page_size: 100 }),
+  })
+  const projects = projectsData?.items || []
+
+  const effectiveProjectId = filterMode === 'project' ? filterProjectId : selectedProject?.id || ''
+
   const { data, isLoading } = useQuery({
-    queryKey: ['data-subdomains', pagination, sorting, searchQuery, scanIdFilter, filterAlive, selectedProject?.id],
+    queryKey: ['data-subdomains', pagination, sorting, searchQuery, filterMode, scanIdValue, effectiveProjectId, filterAlive],
     queryFn: () =>
       dataApi.listSubdomains({
         page: pagination.pageIndex + 1,
         page_size: pagination.pageSize,
         search: searchQuery || undefined,
-        scan_id: scanIdFilter || undefined,
-        project_id: selectedProject?.id,
+        scan_id: filterMode === 'scan_id' ? scanIdValue || undefined : undefined,
+        project_id: effectiveProjectId || undefined,
         status: filterAlive === 'all' ? undefined : filterAlive,
       }),
   })
@@ -139,7 +153,7 @@ export function AssetsPage() {
             </Badge>
           )}
           {data?.items?.length > 0 && (
-            <Button onClick={handleExport} variant="outline" size="sm" className="border-neutral-700 text-neutral-300 gap-2">
+            <Button onClick={handleExport} variant="outline" size="sm" className="gap-2">
               <Download className="h-4 w-4" />
               Export
             </Button>
@@ -147,32 +161,62 @@ export function AssetsPage() {
         </div>
       </div>
 
-      <Card className="bg-neutral-900/50 border-neutral-800 mb-4">
+      <Card className="mb-4">
         <CardContent className="p-4 space-y-3">
-          <div className="flex gap-3 items-end">
-            <div className="relative flex-1 max-w-md">
-              <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
-              <input
+          <div className="flex gap-3 items-end flex-wrap">
+            <div className="relative flex-1 min-w-[200px] max-w-md">
+              <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search assets..."
-                className="w-full bg-neutral-800/50 border border-neutral-700 rounded-lg pl-10 pr-4 py-2.5 text-neutral-100 placeholder-neutral-500 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="pl-10"
               />
             </div>
-            <input
-              type="text"
-              value={scanIdFilter}
-              onChange={(e) => setScanIdFilter(e.target.value)}
-              placeholder="Filter by Scan ID..."
-              className="bg-neutral-800/50 border border-neutral-700 rounded-lg px-4 py-2.5 text-neutral-100 placeholder-neutral-500 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 w-48"
-            />
+
+            <div className="w-[180px]">
+              <Select
+                value={filterMode}
+                placeholder="Filter by..."
+                onChange={(v) => { setFilterMode(v as FilterMode); setScanIdValue(''); setFilterProjectId('') }}
+                options={[
+                  { value: 'all', label: 'All assets' },
+                  { value: 'scan_id', label: 'Scan ID' },
+                  { value: 'project', label: 'Project' },
+                ]}
+              />
+            </div>
+
+            {filterMode === 'scan_id' && (
+              <div className="w-[220px]">
+                <Input
+                  type="text"
+                  value={scanIdValue}
+                  onChange={(e) => setScanIdValue(e.target.value)}
+                  placeholder="Paste scan ID..."
+                />
+              </div>
+            )}
+
+            {filterMode === 'project' && (
+              <div className="w-[200px]">
+                <Select
+                  value={filterProjectId}
+                  placeholder="Choose a project..."
+                  onChange={(v) => setFilterProjectId(v)}
+                  options={projects.map((p: Project) => ({ value: p.id, label: p.name }))}
+                />
+              </div>
+            )}
+
             <div className="flex gap-1.5">
+              <Funnel className="h-4 w-4 text-muted-foreground shrink-0 self-center" />
               {(['all', 'alive', 'dead'] as const).map((f) => (
                 <button
                   key={f}
                   onClick={() => setFilterAlive(f)}
-                  className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                     filterAlive === f
                       ? 'bg-primary text-sidebar-bg'
                       : 'bg-neutral-800 text-neutral-400 hover:text-neutral-200'

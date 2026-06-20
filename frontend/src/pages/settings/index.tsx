@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuthStore } from '@/store/auth'
 import { useChangePassword, useApiKeys } from '@/hooks/useAuth'
+import { authApi, getApiError } from '@/services/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,7 +15,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Key, Plus, Trash, Copy, Check, Eye, EyeSlash, User, Lock } from '@phosphor-icons/react'
+import { Key, Plus, Trash, Copy, Check, Eye, EyeSlash, User, Lock, ShieldCheck, DownloadSimple, Warning } from '@phosphor-icons/react'
 import toast from 'react-hot-toast'
 import type { APIKeyFull } from '@/types'
 
@@ -357,11 +358,145 @@ function ApiKeysSection() {
   )
 }
 
+function DataPrivacySection() {
+  const logout = useAuthStore((s) => s.logout)
+  const [exportLoading, setExportLoading] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState('')
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+
+  const handleExport = async () => {
+    setExportLoading(true)
+    try {
+      const data = await authApi.exportData()
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `reconny-data-export-${new Date().toISOString().split('T')[0]}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success('Data exported successfully')
+    } catch (err) {
+      toast.error(getApiError(err))
+    } finally {
+      setExportLoading(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (deleteConfirm !== 'CONFIRM') return
+    setDeleteLoading(true)
+    try {
+      await authApi.deleteAccount()
+      toast.success('Account deleted. Your data has been anonymised.')
+      localStorage.clear()
+      logout()
+      window.location.href = '/login'
+    } catch (err) {
+      toast.error(getApiError(err))
+      setDeleteLoading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Export Data */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <DownloadSimple className="h-5 w-5 text-muted-foreground" />
+            Export Your Data
+          </CardTitle>
+          <CardDescription>
+            Download a complete copy of all data Reconny holds about you (GDPR Article 20).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex items-center justify-between gap-4">
+          <p className="text-sm text-muted-foreground">
+            Your profile, projects, scans, findings, API keys, and AI insights.
+          </p>
+          <Button
+            onClick={handleExport}
+            disabled={exportLoading}
+            variant="outline"
+            className="shrink-0 gap-2"
+          >
+            <DownloadSimple className="h-4 w-4" />
+            {exportLoading ? 'Exporting...' : 'Download My Data'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Delete Account */}
+      <Card className="border-destructive/20">
+        <CardHeader>
+          <CardTitle className="text-destructive flex items-center gap-2">
+            <Trash className="h-5 w-5" />
+            Delete Account
+          </CardTitle>
+          <CardDescription>
+            Permanently delete your account and anonymise all personal data (GDPR Article 17). This cannot be undone.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex items-center justify-between gap-4">
+          <p className="text-sm text-muted-foreground">
+            Removes your email, name, and password. Scan data is preserved anonymously.
+          </p>
+          <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+            <DialogTrigger asChild>
+              <Button variant="destructive" className="shrink-0 gap-2">
+                <Trash className="h-4 w-4" />
+                Delete My Account
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Warning className="h-5 w-5 text-destructive" />
+                  Delete Account
+                </DialogTitle>
+                <DialogDescription>
+                  This will anonymise your email, full name, and deactivate your account. All your projects and scans will remain in the system but will no longer be linked to your identity. This action is irreversible.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <p className="text-sm">
+                  Type <strong className="text-destructive">CONFIRM</strong> to proceed:
+                </p>
+                <Input
+                  value={deleteConfirm}
+                  onChange={(e) => setDeleteConfirm(e.target.value)}
+                  placeholder="CONFIRM"
+                  className="font-mono"
+                />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleDelete}
+                  disabled={deleteConfirm !== 'CONFIRM' || deleteLoading}
+                >
+                  {deleteLoading ? 'Deleting...' : 'Delete My Account'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 export function SettingsPage() {
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'password', label: 'Change Password', icon: Lock },
     { id: 'api-keys', label: 'API Keys', icon: Key },
+    { id: 'privacy', label: 'Privacy & Data', icon: ShieldCheck },
   ]
   const [activeTab, setActiveTab] = useState('profile')
 
@@ -395,6 +530,7 @@ export function SettingsPage() {
       {activeTab === 'profile' && <ProfileSection />}
       {activeTab === 'password' && <ChangePasswordSection />}
       {activeTab === 'api-keys' && <ApiKeysSection />}
+      {activeTab === 'privacy' && <DataPrivacySection />}
     </div>
   )
 }

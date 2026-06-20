@@ -50,7 +50,8 @@ class LoginRequest(BaseModel):
 
 
 class RegisterRequest(UserCreate):
-    pass
+    accepted_tos: bool = Field(..., description="Must be true to accept Terms of Service")
+
 
 
 class RefreshTokenRequest(BaseModel):

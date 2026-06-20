@@ -25,15 +25,11 @@ export function useLogin() {
 }
 
 export function useRegister() {
-  const navigate = useNavigate()
-
   return useMutation({
     mutationFn: (data: RegisterRequest) => authApi.register(data),
-    onSuccess: () => {
-      navigate('/login')
-    },
   })
 }
+
 
 export function useLogout() {
   const logout = useAuthStore((s) => s.logout)

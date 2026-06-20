@@ -103,6 +103,12 @@ export const authApi = {
   changePassword: (current_password: string, new_password: string) =>
     api.post('/auth/change-password', { current_password, new_password }).then((r) => r.data),
 
+  deleteAccount: () =>
+    api.delete('/auth/me').then((r) => r.data),
+
+  exportData: () =>
+    api.get<Record<string, unknown>>('/auth/me/export').then((r) => r.data),
+
   listApiKeys: () =>
     api.get<APIKey[]>('/auth/api-keys').then((r) => r.data),
 
@@ -112,6 +118,7 @@ export const authApi = {
   revokeApiKey: (keyId: string) =>
     api.delete(`/auth/api-keys/${keyId}`).then((r) => r.data),
 }
+
 
 export const projectApi = {
   create: (data: ProjectCreate) =>

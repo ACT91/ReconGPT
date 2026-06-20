@@ -9,7 +9,7 @@ export function MainLayout() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
 
   return (
-    <div className="h-screen overflow-hidden flex bg-sidebar-bg">
+    <div className="min-h-screen bg-sidebar-bg">
       {/* Mobile sidebar backdrop */}
       {mobileSidebarOpen && (
         <div
@@ -29,9 +29,9 @@ export function MainLayout() {
         </button>
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar — always fixed so content can slide smoothly alongside */}
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-40 flex flex-col bg-sidebar-bg border-r border-neutral-800 transition-all duration-300 ${
+        className={`fixed inset-y-0 left-0 z-40 flex flex-col bg-sidebar-bg border-r border-neutral-800 transition-all duration-300 ease-in-out ${
           mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         } ${sidebarCollapsed ? 'w-[72px]' : 'w-[260px]'}`}
       >
@@ -63,14 +63,16 @@ export function MainLayout() {
         <SidebarNav isCollapsed={sidebarCollapsed} />
       </aside>
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-background">
-          <ErrorBoundary>
-            <Outlet />
-          </ErrorBoundary>
-        </main>
-      </div>
+      {/* Main content — margin-left transitions with the sidebar width */}
+      <main
+        className={`min-h-screen overflow-y-auto p-4 md:p-6 bg-background transition-all duration-300 ease-in-out ${
+          sidebarCollapsed ? 'lg:ml-[72px]' : 'lg:ml-[260px]'
+        }`}
+      >
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
+      </main>
     </div>
   )
 }

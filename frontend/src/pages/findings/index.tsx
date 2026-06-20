@@ -10,18 +10,22 @@ import {
   type SortingState,
 } from '@tanstack/react-table'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { dataApi, scanApi, getApiError } from '@/services/api'
+import { dataApi, scanApi, projectApi, getApiError } from '@/services/api'
 import { SeverityBadge, SkeletonTable, ErrorBoundary } from '@/components/common'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { Select } from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
 import { useProjectStore } from '@/store/project'
-import type { Vulnerability } from '@/types'
+import type { Vulnerability, Project } from '@/types'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
-import { Flag, ProhibitInset, MagnifyingGlass, X, WarningCircle } from '@phosphor-icons/react'
+import { Flag, ProhibitInset, Funnel, MagnifyingGlass, X, WarningCircle } from '@phosphor-icons/react'
 import toast from 'react-hot-toast'
 
 const columnHelper = createColumnHelper<Vulnerability & { scan_job_id?: string }>()
+
+type FilterMode = 'all' | 'scan_id' | 'project'
 
 function VulnDetailPanel({ vuln, onClose, onToggleFP }: { vuln: Vulnerability; onClose: () => void; onToggleFP: (vuln: Vulnerability) => void }) {
   return (
@@ -98,7 +102,9 @@ function VulnDetailPanel({ vuln, onClose, onToggleFP }: { vuln: Vulnerability; o
 export function FindingsPage() {
   const selectedProject = useProjectStore((s) => s.selectedProject)
   const [searchQuery, setSearchQuery] = useState('')
-  const [scanIdFilter, setScanIdFilter] = useState('')
+  const [filterMode, setFilterMode] = useState<FilterMode>('all')
+  const [scanIdValue, setScanIdValue] = useState('')
+  const [filterProjectId, setFilterProjectId] = useState('')
   const [severityFilter, setSeverityFilter] = useState('')
   const [showFP, setShowFP] = useState<'all' | 'real' | 'fp'>('all')
   const [sorting, setSorting] = useState<SortingState>([{ id: 'severity', desc: true }])
@@ -106,15 +112,23 @@ export function FindingsPage() {
   const [selectedVuln, setSelectedVuln] = useState<Vulnerability | null>(null)
   const queryClient = useQueryClient()
 
+  const { data: projectsData } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => projectApi.list({ page_size: 100 }),
+  })
+  const projects = projectsData?.items || []
+
+  const effectiveProjectId = filterMode === 'project' ? filterProjectId : selectedProject?.id || ''
+
   const { data, isLoading } = useQuery({
-    queryKey: ['data-vulnerabilities', pagination, sorting, searchQuery, scanIdFilter, severityFilter, showFP, selectedProject?.id],
+    queryKey: ['data-vulnerabilities', pagination, sorting, searchQuery, filterMode, scanIdValue, effectiveProjectId, severityFilter, showFP],
     queryFn: () =>
       dataApi.listVulnerabilities({
         page: pagination.pageIndex + 1,
         page_size: pagination.pageSize,
         search: searchQuery || undefined,
-        scan_id: scanIdFilter || undefined,
-        project_id: selectedProject?.id,
+        scan_id: filterMode === 'scan_id' ? scanIdValue || undefined : undefined,
+        project_id: effectiveProjectId || undefined,
         severity: severityFilter || undefined,
         is_false_positive: showFP === 'fp' ? true : showFP === 'real' ? false : undefined,
       }),
@@ -248,28 +262,58 @@ export function FindingsPage() {
         )}
       </div>
 
-      <Card className="bg-neutral-900/50 border-neutral-800 mb-4">
+      <Card className="mb-4">
         <CardContent className="p-4 space-y-3">
-          <div className="flex gap-3 items-end">
-            <div className="relative flex-1 max-w-md">
-              <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
-              <input
+          <div className="flex gap-3 items-end flex-wrap">
+            <div className="relative flex-1 min-w-[200px] max-w-md">
+              <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search findings..."
-                className="w-full bg-neutral-800/50 border border-neutral-700 rounded-lg pl-10 pr-4 py-2.5 text-neutral-100 placeholder-neutral-500 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="pl-10"
               />
             </div>
-            <input
-              type="text"
-              value={scanIdFilter}
-              onChange={(e) => setScanIdFilter(e.target.value)}
-              placeholder="Filter by Scan ID..."
-              className="bg-neutral-800/50 border border-neutral-700 rounded-lg px-4 py-2.5 text-neutral-100 placeholder-neutral-500 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 w-48"
-            />
+
+            <div className="w-[180px]">
+              <Select
+                value={filterMode}
+                placeholder="Filter by..."
+                onChange={(v) => { setFilterMode(v as FilterMode); setScanIdValue(''); setFilterProjectId('') }}
+                options={[
+                  { value: 'all', label: 'All findings' },
+                  { value: 'scan_id', label: 'Scan ID' },
+                  { value: 'project', label: 'Project' },
+                ]}
+              />
+            </div>
+
+            {filterMode === 'scan_id' && (
+              <div className="w-[220px]">
+                <Input
+                  type="text"
+                  value={scanIdValue}
+                  onChange={(e) => setScanIdValue(e.target.value)}
+                  placeholder="Paste scan ID..."
+                />
+              </div>
+            )}
+
+            {filterMode === 'project' && (
+              <div className="w-[200px]">
+                <Select
+                  value={filterProjectId}
+                  placeholder="Choose a project..."
+                  onChange={(v) => setFilterProjectId(v)}
+                  options={projects.map((p: Project) => ({ value: p.id, label: p.name }))}
+                />
+              </div>
+            )}
           </div>
+
           <div className="flex flex-wrap gap-2 items-center">
+            <Funnel className="h-4 w-4 text-muted-foreground shrink-0" />
             {['', 'critical', 'high', 'medium', 'low', 'info'].map((sev) => (
               <button
                 key={sev}

@@ -17,6 +17,11 @@ import { useScanWebSocket } from '@/hooks/useScanWebSocket'
 import { ScanProgressBar, StatusBadge, LiveLogsViewer, SkeletonTable, ErrorBoundary } from '@/components/common'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import type { ScanJob, ScanProgress, ScanLogEntry, Project } from '@/types'
 import { Globe, Network, WarningCircle, Robot, FileText, FloppyDisk, RocketLaunch } from '@phosphor-icons/react'
@@ -59,15 +64,19 @@ function NewScanModal({
     onError: (err) => setError(getApiError(err)),
   })
 
-  if (!open) return null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
-      <div className="bg-neutral-900 rounded-lg border border-neutral-800 p-6 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-xl font-semibold text-neutral-50 mb-4">New Scan</h2>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
+        <DialogHeader>
+          <DialogTitle>New Scan</DialogTitle>
+        </DialogHeader>
+
         {error && (
-          <div className="mb-4 p-3 rounded-lg bg-neutral-800/50 border border-neutral-700 text-neutral-300 text-sm">{error}</div>
+          <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+            {error}
+          </div>
         )}
+
         <form
           onSubmit={(e) => {
             e.preventDefault()
@@ -78,63 +87,49 @@ function NewScanModal({
               config: { vuln_scan: runVulnScan },
             })
           }}
+          className="space-y-4"
         >
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-neutral-300 mb-2">Target Domain</label>
-            <input
+          <div className="space-y-2">
+            <Label htmlFor="target-domain">Target Domain</Label>
+            <Input
+              id="target-domain"
               type="text"
               value={targetDomain}
               onChange={(e) => setTargetDomain(e.target.value)}
-              className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-4 py-2.5 text-neutral-50 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary/50"
               placeholder="example.com"
               required
             />
           </div>
 
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-neutral-300 mb-2">Project (optional)</label>
-            <select
+          <div className="space-y-2">
+            <Label htmlFor="project-select">Project (optional)</Label>
+            <Select
+              id="project-select"
               value={effectiveProjectId}
-              onChange={(e) => setProjectId(e.target.value)}
-              className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-4 py-2.5 text-neutral-50 focus:outline-none focus:ring-2 focus:ring-primary/50"
-            >
-              <option value="">{selectedProject ? selectedProject.name : 'No project selected'}</option>
-              {projects.map((p: Project) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="mb-4 flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="run-vuln-scan"
-              checked={runVulnScan}
-              onChange={(e) => setRunVulnScan(e.target.checked)}
-              className="w-4 h-4 rounded border-neutral-700 bg-neutral-800 text-primary focus:ring-primary/50"
+              placeholder={selectedProject ? selectedProject.name : 'No project selected'}
+              onChange={(v) => setProjectId(v)}
+              options={projects.map((p: Project) => ({ value: p.id, label: p.name }))}
             />
-            <label htmlFor="run-vuln-scan" className="text-sm text-neutral-300">
-              Run vulnerability scan (takes longer)
-            </label>
           </div>
 
-          <div className="flex gap-2 justify-end">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-neutral-300 hover:text-neutral-50 transition-colors">
+          <Checkbox
+            id="run-vuln-scan"
+            checked={runVulnScan}
+            onChange={(e) => setRunVulnScan(e.target.checked)}
+            label="Run vulnerability scan (takes longer)"
+          />
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={startScan.isPending}
-              className="px-4 py-2 bg-primary text-sidebar-bg hover:bg-primary/90 rounded-lg transition-colors disabled:opacity-50"
-            >
+            </Button>
+            <Button type="submit" disabled={startScan.isPending}>
               {startScan.isPending ? 'Starting...' : 'Start Scan'}
-            </button>
-          </div>
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -208,38 +203,37 @@ function ScanDetailPanel({ job, onClose }: { job: ScanJob; onClose: () => void }
   const canRunVulnScan = (job.status === 'completed' || job.status === 'partial') && !vulnScanMutation.isPending
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
-      <div className="bg-neutral-900 rounded-lg border border-neutral-800 w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-        <div className="p-6 border-b border-neutral-800 flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-neutral-50">{job.target_domain}</h2>
-            <div className="flex items-center gap-2 mt-1">
+    <Dialog open={!!job} onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0">
+        <div className="p-6 border-b border-border flex items-start justify-between">
+          <div className="min-w-0">
+            <DialogTitle className="text-xl truncate">{job.target_domain}</DialogTitle>
+            <div className="flex items-center gap-2 mt-1.5">
               <StatusBadge status={job.status} />
-              <span className="text-sm text-neutral-400">Started {new Date(job.created_at).toLocaleString()}</span>
+              <span className="text-xs text-muted-foreground">Started {new Date(job.created_at).toLocaleString()}</span>
               {job.project_id && (
-                <Badge variant="outline" className="text-xs text-neutral-500">
+                <Badge variant="outline" className="text-[10px] text-muted-foreground">
                   Project: {job.project_id.slice(0, 8)}...
                 </Badge>
               )}
             </div>
           </div>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-50 text-xl">&times;</button>
         </div>
 
-        <div className="px-4 py-2 border-b border-neutral-800 flex gap-2 flex-wrap">
-          <Link to={`/assets/${job.id}`} className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-primary transition-colors">
+        <div className="px-6 py-2 border-b border-border flex gap-3 flex-wrap">
+          <Link to={`/assets/${job.id}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
             <Globe className="h-3.5 w-3.5" /> Assets
           </Link>
-          <Link to={`/endpoints/${job.id}`} className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-primary transition-colors">
+          <Link to={`/endpoints/${job.id}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
             <Network className="h-3.5 w-3.5" /> Endpoints
           </Link>
-          <Link to={`/findings/${job.id}`} className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-primary transition-colors">
+          <Link to={`/findings/${job.id}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
             <WarningCircle className="h-3.5 w-3.5" /> Findings
           </Link>
-          <Link to={`/ai-analysis/${job.id}`} className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-primary transition-colors">
+          <Link to={`/ai-analysis/${job.id}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
             <Robot className="h-3.5 w-3.5" /> AI Analysis
           </Link>
-          <Link to={`/reports/${job.id}`} className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-primary transition-colors">
+          <Link to={`/reports/${job.id}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
             <FileText className="h-3.5 w-3.5" /> Reports
           </Link>
           {canRunVulnScan && (
@@ -255,16 +249,16 @@ function ScanDetailPanel({ job, onClose }: { job: ScanJob; onClose: () => void }
           )}
         </div>
 
-        <div className="flex border-b border-neutral-800">
+        <div className="flex border-b border-border">
           <button
             onClick={() => setActiveTab('progress')}
-            className={`px-4 py-2 text-sm font-medium ${activeTab === 'progress' ? 'text-primary border-b-2 border-primary' : 'text-neutral-400 hover:text-neutral-50'}`}
+            className={`px-4 py-2.5 text-sm font-medium transition-colors ${activeTab === 'progress' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}
           >
             Progress
           </button>
           <button
             onClick={() => setActiveTab('logs')}
-            className={`px-4 py-2 text-sm font-medium ${activeTab === 'logs' ? 'text-primary border-b-2 border-primary' : 'text-neutral-400 hover:text-neutral-50'}`}
+            className={`px-4 py-2.5 text-sm font-medium transition-colors ${activeTab === 'logs' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}
           >
             Live Logs
           </button>
@@ -292,21 +286,22 @@ function ScanDetailPanel({ job, onClose }: { job: ScanJob; onClose: () => void }
         </div>
 
         {(job.status === 'running' || job.status === 'queued') && (
-          <div className="p-4 border-t border-neutral-800">
-            <button
+          <div className="p-4 border-t border-border">
+            <Button
+              variant="destructive"
+              size="sm"
               onClick={async () => {
                 try {
                   await scanApi.cancel(job.id)
                 } catch {}
               }}
-              className="px-4 py-2 bg-destructive hover:bg-destructive/90 text-neutral-50 rounded-lg text-sm transition-colors"
             >
               Cancel Scan
-            </button>
+            </Button>
           </div>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
