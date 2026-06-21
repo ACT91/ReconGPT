@@ -115,8 +115,15 @@ class ScanService:
         return list(jobs), total
 
     async def get_job_progress(self, job: ScanJob) -> ScanProgressResponse:
+        config = job.scan_config or {}
+        skip_map = {
+            PipelineStage.VULN_SCAN: "vuln_scan",
+        }
         stages = []
         for stage in STAGE_ORDER:
+            config_key = skip_map.get(stage)
+            if config_key and not config.get(config_key, True):
+                continue
             stage_result = await self._get_stage_progress(job.id, stage)
             stages.append(stage_result)
         
@@ -202,16 +209,20 @@ class ScanService:
         logs = result.scalars().all()
         
         page_size = pagination.page_size if pagination else 50
+        page = pagination.page if pagination else 1
         return ScanLogsResponse(
-            logs=[ScanLogEntry(
+            items=[ScanLogEntry(
                 timestamp=log.timestamp,
                 level=log.level.value if log.level else None,
                 message=log.message,
                 stage=log.stage if log.stage else None,
-                metadata=log.details,
+                details=log.details,
             ) for log in logs],
             total=total,
-            has_more=(pagination.page * page_size) < total if pagination else False,
+            page=page,
+            page_size=page_size,
+            total_pages=(total + page_size - 1) // page_size if page_size else 1,
+            has_more=(page * page_size) < total if pagination else False,
         )
 
     async def get_scan_results(self, job_id: UUID) -> Dict[str, Any]:

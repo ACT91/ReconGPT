@@ -351,12 +351,11 @@ async def _save_results_to_db(job_id: str):
                             )
                             session.add(sd)
             
-            live_hosts_file = storage_path / "live_hosts.json"
-            if not live_hosts_file.exists():
-                live_hosts_file = storage_path / "live_hosts.txt"
-            if live_hosts_file.exists():
+            live_hosts_json = storage_path / "live_hosts.json"
+            live_hosts_txt = storage_path / "live_hosts.txt"
+            if live_hosts_json.exists() and live_hosts_json.stat().st_size > 0:
                 import json
-                with open(live_hosts_file) as f:
+                with open(live_hosts_json) as f:
                     for line in f:
                         line = line.strip()
                         if not line:
@@ -390,20 +389,75 @@ async def _save_results_to_db(job_id: str):
                                 from app.models.subdomain import SubdomainStatus
                                 sd.status = SubdomainStatus.ALIVE
                         except json.JSONDecodeError as je:
-                            logger.warning("live_hosts_parse_failed", job_id=job_id, error=str(je), line=line[:200])
+                            logger.warning("live_hosts_json_parse_failed", job_id=job_id, error=str(je), line=line[:200])
                             continue
+            elif live_hosts_txt.exists():
+                from urllib.parse import urlparse
+                with open(live_hosts_txt) as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        name = urlparse(line).hostname or line
+                        subdomain = await session.execute(
+                            select(Subdomain).where(
+                                Subdomain.scan_job_id == job.id,
+                                Subdomain.name == name,
+                            )
+                        )
+                        sd = subdomain.scalar_one_or_none()
+                        if sd:
+                            sd.is_alive = True
+                            sd.probed_at = datetime.now(timezone.utc)
+                            from app.models.subdomain import SubdomainStatus
+                            sd.status = SubdomainStatus.ALIVE
             
+            source_file_mapping = [
+                ("endpoints_crawl.txt", EndpointSource.CRAWL),
+                ("endpoints_hidden.txt", EndpointSource.JS_MINING),
+                ("endpoints_api.txt", EndpointSource.JS_MINING),
+            ]
+            seen_endpoint_urls = set()
+            for filename, source in source_file_mapping:
+                source_path = storage_path / filename
+                if source_path.exists():
+                    lines = source_path.read_text(encoding="utf-8", errors="ignore").split('\n')
+                    for line in lines:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        normalized = line.rstrip('/')
+                        if normalized in seen_endpoint_urls:
+                            continue
+                        seen_endpoint_urls.add(normalized)
+                        existing = await session.execute(
+                            select(Endpoint).where(
+                                Endpoint.scan_job_id == job.id,
+                                Endpoint.normalized_url == normalized,
+                            )
+                        )
+                        if not existing.scalar_one_or_none():
+                            from urllib.parse import urlparse
+                            parsed = urlparse(line)
+                            ep = Endpoint(
+                                scan_job_id=job.id,
+                                url=line,
+                                normalized_url=normalized,
+                                path=parsed.path or "/",
+                                source=source,
+                            )
+                            session.add(ep)
+
             endpoints_file = storage_path / "endpoints_merged.txt"
             if endpoints_file.exists():
                 lines = endpoints_file.read_text(encoding="utf-8", errors="ignore").split('\n')
-                seen_urls = set()
                 for line in lines:
                     line = line.strip()
                     if line:
                         normalized = line.rstrip('/')
-                        if normalized in seen_urls:
+                        if normalized in seen_endpoint_urls:
                             continue
-                        seen_urls.add(normalized)
+                        seen_endpoint_urls.add(normalized)
                         existing = await session.execute(
                             select(Endpoint).where(
                                 Endpoint.scan_job_id == job.id,

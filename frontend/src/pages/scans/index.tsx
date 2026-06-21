@@ -198,7 +198,22 @@ function ScanDetailPanel({ job, onClose }: { job: ScanJob; onClose: () => void }
   })
 
   const displayProgress = progressData || progress
-  const displayLogs = logsData?.items || logs
+  const mergedLogs = useMemo(() => {
+    const restLogs = logsData?.items || []
+    if (restLogs.length === 0) return logs
+    const seen = new Set(logs.map((l) => `${l.timestamp}|${l.message}`))
+    const deduped = logs.slice()
+    for (const l of restLogs) {
+      const key = `${l.timestamp}|${l.message}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        deduped.push(l)
+      }
+    }
+    return deduped.sort(
+      (a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime()
+    )
+  }, [logsData, logs])
 
   const canRunVulnScan = (job.status === 'completed' || job.status === 'partial') && !vulnScanMutation.isPending
 
@@ -282,24 +297,29 @@ function ScanDetailPanel({ job, onClose }: { job: ScanJob; onClose: () => void }
             </div>
           )}
 
-          {activeTab === 'logs' && <LiveLogsViewer logs={displayLogs} maxHeight="60vh" />}
+          {activeTab === 'logs' && <LiveLogsViewer logs={mergedLogs} maxHeight="60vh" />}
         </div>
 
-        {(job.status === 'running' || job.status === 'queued') && (
-          <div className="p-4 border-t border-border">
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={async () => {
-                try {
-                  await scanApi.cancel(job.id)
-                } catch {}
-              }}
-            >
-              Cancel Scan
-            </Button>
-          </div>
-        )}
+        {(() => {
+          const currentStatus = progressData?.overall_status ?? job.status
+          return (currentStatus === 'running' || currentStatus === 'queued') && (
+            <div className="p-4 border-t border-border">
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    await scanApi.cancel(job.id)
+                  } catch (err) {
+                    toast.error(getApiError(err))
+                  }
+                }}
+              >
+                Cancel Scan
+              </Button>
+            </div>
+          )
+        })()}
       </DialogContent>
     </Dialog>
   )
@@ -330,6 +350,7 @@ export function ScansPage() {
   const cancelScan = useMutation({
     mutationFn: (jobId: string) => scanApi.cancel(jobId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['scans'] }),
+    onError: (err) => toast.error(getApiError(err)),
   })
 
   const vulnScanMutation = useMutation({

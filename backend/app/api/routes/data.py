@@ -136,7 +136,11 @@ async def list_endpoints(
         )
 
     if source:
-        query = query.where(cast(Endpoint.source, SA_String) == source)
+        try:
+            source_val = EndpointSource(source).value
+            query = query.where(Endpoint.source == source_val)
+        except ValueError:
+            pass
 
     if method:
         query = query.where(func.lower(Endpoint.method) == method.lower())

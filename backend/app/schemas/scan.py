@@ -70,7 +70,7 @@ class ScanLogEntry(BaseSchema):
     level: str
     message: str
     stage: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    details: Optional[Dict[str, Any]] = None
 
 
 class ScanLogsRequest(BaseSchema):
@@ -81,9 +81,12 @@ class ScanLogsRequest(BaseSchema):
 
 
 class ScanLogsResponse(BaseSchema):
-    logs: List[ScanLogEntry]
+    items: List[ScanLogEntry]
     total: int
-    has_more: bool
+    page: int = 1
+    page_size: int = 50
+    total_pages: int = 0
+    has_more: bool = False
 
 
 class ScanStageProgress(BaseSchema):

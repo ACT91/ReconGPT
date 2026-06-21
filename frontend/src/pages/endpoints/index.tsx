@@ -35,7 +35,7 @@ const METHOD_COLORS: Record<string, string> = {
   HEAD: 'bg-neutral-700 text-neutral-300',
 }
 
-const SOURCE_OPTIONS = ['all', 'reconstructed', 'crawl', 'js_mining', 'gau', 'manual']
+const SOURCE_OPTIONS = ['all', 'reconstructed', 'crawl', 'js_mining', 'gau', 'wayback', 'manual']
 
 type FilterMode = 'all' | 'scan_id' | 'project'
 
