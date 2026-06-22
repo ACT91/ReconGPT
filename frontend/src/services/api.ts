@@ -52,7 +52,7 @@ api.interceptors.response.use(
   async (error: AxiosError<ApiError>) => {
     const config = error.config as RetryConfig | undefined
     if (config?._isRetry) return Promise.reject(error)
-    if (error.response?.status === 401 && !config?.url?.includes('/auth/')) {
+    if (error.response?.status === 401 && config?.url?.startsWith('/') && !config.url.includes('/auth/')) {
       const refreshToken = localStorage.getItem('refresh_token')
       if (!refreshToken) {
         localStorage.clear()
@@ -63,12 +63,16 @@ api.interceptors.response.use(
         const { data } = await axios.post<AuthTokens>('/api/v1/auth/refresh', {
           refresh_token: refreshToken,
         })
-        localStorage.setItem('access_token', data.access_token)
-        localStorage.setItem('refresh_token', data.refresh_token)
+        // Sanitize tokens before storing to prevent XSS
+        const accessToken = String(data.access_token).replace(/[^A-Za-z0-9._-]/g, '')
+        const newRefreshToken = String(data.refresh_token).replace(/[^A-Za-z0-9._-]/g, '')
+        if (!accessToken || !newRefreshToken) return Promise.reject(error)
+        localStorage.setItem('access_token', accessToken)
+        localStorage.setItem('refresh_token', newRefreshToken)
         if (!config) return Promise.reject(error)
         config._isRetry = true
         config.headers = config.headers || {}
-        config.headers.Authorization = `Bearer ${data.access_token}`
+        config.headers.Authorization = `Bearer ${accessToken}`
         return api.request(config)
       } catch {
         localStorage.clear()

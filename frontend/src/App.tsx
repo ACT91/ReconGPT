@@ -14,7 +14,10 @@ const queryClient = new QueryClient({
     },
     mutations: {
       onError: (error) => {
-        console.error('Mutation error:', error)
+        // Log errors without exposing sensitive information
+        if (error instanceof Error) {
+          console.error('Mutation error:', error.name.replace(/[\r\n]/g, ''))
+        }
       },
     },
   },

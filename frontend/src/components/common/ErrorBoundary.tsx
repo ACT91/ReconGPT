@@ -21,7 +21,9 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('ErrorBoundary caught:', error, errorInfo)
+    const safeName = error.name.replace(/[\r\n]/g, '')
+    const safeStack = errorInfo.componentStack?.substring(0, 100).replace(/[\r\n]/g, '')
+    console.error('ErrorBoundary caught:', safeName, safeStack)
   }
 
   render() {

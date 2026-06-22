@@ -332,7 +332,10 @@ async def _save_results_to_db(job_id: str):
             if not job:
                 return
             
-            storage_path = Path(settings.STORAGE_PATH) / str(job_id)
+            storage_path = (Path(settings.STORAGE_PATH) / str(job_id)).resolve()
+            if not storage_path.is_relative_to(Path(settings.STORAGE_PATH).resolve()):
+                logger.error("invalid_storage_path", job_id=job_id)
+                return
             
             subdomains_file = storage_path / "subdomains.txt"
             if subdomains_file.exists():

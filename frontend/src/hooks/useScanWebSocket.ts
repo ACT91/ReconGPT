@@ -43,7 +43,12 @@ export function useScanWebSocket({
 
       ws.onmessage = (event) => {
         try {
-          const message: WSMessage = JSON.parse(event.data)
+          if (typeof event.data !== 'string') return
+          if (event.data.length > 1_000_000) return
+          const parsed = JSON.parse(event.data)
+          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return
+          if (typeof parsed.type !== 'string' || !parsed.type) return
+          const message = parsed as WSMessage
           handlersRef.current.onMessage?.(message)
           if (message.type === 'progress') handlersRef.current.onProgress?.(message)
           if (message.type === 'log') handlersRef.current.onLog?.(message)

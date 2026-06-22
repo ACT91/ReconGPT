@@ -11,7 +11,16 @@ async def fix():
     from pathlib import Path
 
     job_id = UUID(sys.argv[1]) if len(sys.argv) > 1 else UUID('f342f494-37cd-478a-b2f3-a0d4b675067d')
-    storage_path = Path('/app/storage/jobs') / str(job_id)
+    storage_base = Path('/app/storage/jobs')
+    storage_path = storage_base / str(job_id)
+    
+    # Validate path is within allowed directory
+    storage_path = storage_path.resolve()
+    storage_base = storage_base.resolve()
+    if not storage_path.is_relative_to(storage_base):
+        print(f'Invalid storage path for job {job_id}')
+        return
+    
     live_hosts_file = storage_path / 'live_hosts.json'
     if not live_hosts_file.exists():
         live_hosts_file = storage_path / 'live_hosts.txt'

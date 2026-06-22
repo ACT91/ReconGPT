@@ -11,8 +11,12 @@ export function useLogin() {
   return useMutation({
     mutationFn: (data: LoginRequest) => authApi.login(data),
     onSuccess: async (tokens) => {
-      localStorage.setItem('access_token', tokens.access_token)
-      localStorage.setItem('refresh_token', tokens.refresh_token)
+      // Validate and sanitize tokens before storing to prevent XSS
+      const sanitizedAccess = String(tokens.access_token).replace(/[^A-Za-z0-9._-]/g, '')
+      const sanitizedRefresh = String(tokens.refresh_token).replace(/[^A-Za-z0-9._-]/g, '')
+      if (!sanitizedAccess || !sanitizedRefresh) return
+      localStorage.setItem('access_token', sanitizedAccess)
+      localStorage.setItem('refresh_token', sanitizedRefresh)
       try {
         const user = await authApi.me()
         setUser(user)

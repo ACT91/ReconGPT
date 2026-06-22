@@ -37,8 +37,10 @@ async def run_nuclei(
     result = await run_command_async(cmd, timeout=3600)
     
     vulnerabilities_count = 0
-    if output_file.exists():
-        with open(output_file, encoding="utf-8", errors="ignore") as f:
+    resolved_storage = Path(settings.STORAGE_PATH).resolve()
+    resolved_output = output_file.resolve()
+    if resolved_output.exists() and resolved_output.is_relative_to(resolved_storage):
+        with open(resolved_output, encoding="utf-8", errors="ignore") as f:
             vulnerabilities_count = sum(1 for _ in f)
     
     if result["returncode"] < 0:

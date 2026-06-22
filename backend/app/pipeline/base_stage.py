@@ -136,14 +136,16 @@ class PipelineStageBase(ABC):
         await self.update_job_status(ScanStatus.FAILED, self.stage_name, error)
 
     def save_json(self, data: Any, filename: str) -> Path:
-        path = self.output_dir / filename
+        path = (self.output_dir / filename).resolve()
+        if not path.is_relative_to(self.output_dir.resolve()):
+            raise ValueError("Invalid file path")
         with open(path, 'w') as f:
             json.dump(data, f, indent=2)
         return path
 
     def read_file(self, filename: str) -> str:
-        path = self.output_dir / filename
-        if not path.exists():
+        path = (self.output_dir / filename).resolve()
+        if not path.is_relative_to(self.output_dir.resolve()) or not path.exists():
             return ""
         return path.read_text(encoding='utf-8', errors='ignore')
 
@@ -152,16 +154,16 @@ class PipelineStageBase(ABC):
         return [line.strip() for line in content.split('\n') if line.strip()]
 
     def read_json(self, filename: str) -> Optional[Any]:
-        path = self.output_dir / filename
-        if not path.exists():
+        path = (self.output_dir / filename).resolve()
+        if not path.is_relative_to(self.output_dir.resolve()) or not path.exists():
             return None
         with open(path) as f:
             return json.load(f)
     
     def read_jsonl(self, filename: str) -> List[Dict[str, Any]]:
         """Read JSONL file (one JSON object per line)"""
-        path = self.output_dir / filename
-        if not path.exists():
+        path = (self.output_dir / filename).resolve()
+        if not path.is_relative_to(self.output_dir.resolve()) or not path.exists():
             return []
         results = []
         with open(path) as f:
@@ -175,6 +177,8 @@ class PipelineStageBase(ABC):
         return results
 
     def write_lines(self, filename: str, lines: List[str]) -> Path:
-        path = self.output_dir / filename
+        path = (self.output_dir / filename).resolve()
+        if not path.is_relative_to(self.output_dir.resolve()):
+            raise ValueError("Invalid file path")
         path.write_text('\n'.join(sorted(set(lines))))
         return path
