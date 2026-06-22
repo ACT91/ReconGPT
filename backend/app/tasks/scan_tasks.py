@@ -503,6 +503,39 @@ async def _save_results_to_db(job_id: str):
                                 source=EndpointSource.RECONSTRUCTED.value,
                             )
                             session.add(ep)
+
+            # Save reconstructed full URLs from full_urls.txt
+            full_urls_file = storage_path / "full_urls.txt"
+            if full_urls_file.exists():
+                lines = full_urls_file.read_text(encoding="utf-8", errors="ignore").split('\n')
+                reconstructed_count = 0
+                for line in lines:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    normalized = line.rstrip('/')
+                    if normalized in seen_endpoint_urls:
+                        continue
+                    seen_endpoint_urls.add(normalized)
+                    existing = await session.execute(
+                        select(Endpoint).where(
+                            Endpoint.scan_job_id == job.id,
+                            Endpoint.normalized_url == normalized,
+                        )
+                    )
+                    if not existing.scalar_one_or_none():
+                        parsed = urlparse(line)
+                        ep = Endpoint(
+                            scan_job_id=job.id,
+                            url=line,
+                            normalized_url=normalized,
+                            path=parsed.path or "/",
+                            source=EndpointSource.RECONSTRUCTED.value,
+                        )
+                        session.add(ep)
+                        reconstructed_count += 1
+                if reconstructed_count:
+                    logger.info("reconstructed_urls_saved", job_id=job_id, count=reconstructed_count)
             
             nuclei_file = storage_path / "nuclei_results.json"
             if nuclei_file.exists():
