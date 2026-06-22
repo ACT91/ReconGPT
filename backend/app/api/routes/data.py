@@ -137,8 +137,7 @@ async def list_endpoints(
 
     if source:
         try:
-            source_val = EndpointSource(source).value
-            query = query.where(Endpoint.source == source_val)
+            query = query.where(Endpoint.source == source)
         except ValueError:
             pass
 
@@ -163,7 +162,7 @@ async def list_endpoints(
             "normalized_url": e.normalized_url,
             "path": e.path,
             "method": e.method,
-            "source": e.source.value if e.source else None,
+            "source": e.source,
             "status_code": e.status_code,
             "content_type": e.content_type,
             "content_length": e.content_length,

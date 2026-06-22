@@ -13,7 +13,6 @@ async def run_gau(
     cmd = [
         settings.GAU_PATH,
         "--o", str(output_file),
-        "--silent",
         "--threads", "10",
         "--retries", "2",
         "--timeout", "10",

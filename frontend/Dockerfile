@@ -1,11 +1,12 @@
-FROM node:18-alpine AS builder
+FROM node:24-alpine AS builder
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN npm install -g pnpm@8.15.5
+ENV CI=true
 
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+COPY package.json pnpm-lock.yaml .npmrc ./
+RUN pnpm install --no-frozen-lockfile
 
 COPY . .
 RUN pnpm run build

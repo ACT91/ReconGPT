@@ -353,6 +353,11 @@ async def _save_results_to_db(job_id: str):
             
             live_hosts_json = storage_path / "live_hosts.json"
             live_hosts_txt = storage_path / "live_hosts.txt"
+            from app.models.subdomain import SubdomainStatus
+            from urllib.parse import urlparse
+            
+            live_hosts_set = set()
+            
             if live_hosts_json.exists() and live_hosts_json.stat().st_size > 0:
                 import json
                 with open(live_hosts_json) as f:
@@ -365,9 +370,15 @@ async def _save_results_to_db(job_id: str):
                             if not isinstance(host, dict):
                                 continue
                             
-                            name = host.get("host") or host.get("input")
+                            url = host.get("url") or host.get("host") or host.get("input")
+                            if not url:
+                                continue
+                            
+                            name = urlparse(url).hostname if url.startswith("http") else url
                             if not name:
                                 continue
+                            
+                            live_hosts_set.add(name)
                             
                             subdomain = await session.execute(
                                 select(Subdomain).where(
@@ -386,19 +397,18 @@ async def _save_results_to_db(job_id: str):
                                 sd.ips = host.get("a", [])
                                 sd.cname = host.get("cname", [None])[0] if host.get("cname") else None
                                 sd.probed_at = datetime.now(timezone.utc)
-                                from app.models.subdomain import SubdomainStatus
                                 sd.status = SubdomainStatus.ALIVE
                         except json.JSONDecodeError as je:
                             logger.warning("live_hosts_json_parse_failed", job_id=job_id, error=str(je), line=line[:200])
                             continue
             elif live_hosts_txt.exists():
-                from urllib.parse import urlparse
                 with open(live_hosts_txt) as f:
                     for line in f:
                         line = line.strip()
                         if not line:
                             continue
-                        name = urlparse(line).hostname or line
+                        name = urlparse(line).hostname if line.startswith("http") else line
+                        live_hosts_set.add(name)
                         subdomain = await session.execute(
                             select(Subdomain).where(
                                 Subdomain.scan_job_id == job.id,
@@ -409,8 +419,15 @@ async def _save_results_to_db(job_id: str):
                         if sd:
                             sd.is_alive = True
                             sd.probed_at = datetime.now(timezone.utc)
-                            from app.models.subdomain import SubdomainStatus
                             sd.status = SubdomainStatus.ALIVE
+            
+            all_subdomains = await session.execute(
+                select(Subdomain).where(Subdomain.scan_job_id == job.id)
+            )
+            for sd in all_subdomains.scalars().all():
+                if sd.name not in live_hosts_set:
+                    sd.is_alive = False
+                    sd.status = SubdomainStatus.DEAD
             
             source_file_mapping = [
                 ("endpoints_crawl.txt", EndpointSource.CRAWL),
@@ -418,6 +435,8 @@ async def _save_results_to_db(job_id: str):
                 ("endpoints_api.txt", EndpointSource.JS_MINING),
             ]
             seen_endpoint_urls = set()
+            from urllib.parse import urlparse
+            
             for filename, source in source_file_mapping:
                 source_path = storage_path / filename
                 if source_path.exists():
@@ -437,14 +456,13 @@ async def _save_results_to_db(job_id: str):
                             )
                         )
                         if not existing.scalar_one_or_none():
-                            from urllib.parse import urlparse
                             parsed = urlparse(line)
                             ep = Endpoint(
                                 scan_job_id=job.id,
                                 url=line,
                                 normalized_url=normalized,
                                 path=parsed.path or "/",
-                                source=source,
+                                source=source.value,
                             )
                             session.add(ep)
 
@@ -465,14 +483,13 @@ async def _save_results_to_db(job_id: str):
                             )
                         )
                         if not existing.scalar_one_or_none():
-                            from urllib.parse import urlparse
                             parsed = urlparse(line)
                             ep = Endpoint(
                                 scan_job_id=job.id,
                                 url=line,
                                 normalized_url=normalized,
                                 path=parsed.path or "/",
-                                source=EndpointSource.RECONSTRUCTED,
+                                source=EndpointSource.RECONSTRUCTED.value,
                             )
                             session.add(ep)
             
