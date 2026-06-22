@@ -157,6 +157,22 @@ class PipelineStageBase(ABC):
             return None
         with open(path) as f:
             return json.load(f)
+    
+    def read_jsonl(self, filename: str) -> List[Dict[str, Any]]:
+        """Read JSONL file (one JSON object per line)"""
+        path = self.output_dir / filename
+        if not path.exists():
+            return []
+        results = []
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        results.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+        return results
 
     def write_lines(self, filename: str, lines: List[str]) -> Path:
         path = self.output_dir / filename

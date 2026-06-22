@@ -54,14 +54,21 @@ function NewScanModal({
   const startScan = useMutation({
     mutationFn: (data: { target_domain: string; project_id?: string; config?: Record<string, unknown> }) =>
       scanApi.start(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['scans'] })
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['scans'] })
+      await queryClient.refetchQueries({ queryKey: ['scans'] })
+      toast.success('Scan started successfully')
       onClose()
       setTargetDomain('')
       setProjectId('')
       setRunVulnScan(true)
+      setError('')
     },
-    onError: (err) => setError(getApiError(err)),
+    onError: (err) => {
+      const errMsg = getApiError(err)
+      setError(errMsg)
+      toast.error(errMsg)
+    },
   })
 
   return (

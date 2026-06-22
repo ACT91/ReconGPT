@@ -15,14 +15,14 @@ class UrlReconstructStage(PipelineStageBase):
         
         try:
             endpoints_file = self.output_dir / "endpoints_merged.txt"
-            live_hosts_file = self.output_dir / "live_hosts.txt"
+            live_hosts_file = self.output_dir / "live_hosts.json"
             
             if not endpoints_file.exists() or not live_hosts_file.exists():
                 missing = []
                 if not endpoints_file.exists():
                     missing.append("endpoints_merged.txt")
                 if not live_hosts_file.exists():
-                    missing.append("live_hosts.txt")
+                    missing.append("live_hosts.json")
                 return {"success": False, "error": f"Missing files: {', '.join(missing)}"}
             
             # Extract URLs from JSONL format

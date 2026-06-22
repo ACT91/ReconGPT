@@ -30,9 +30,9 @@ class LiveProbeStage(PipelineStageBase):
             
             live_hosts = self.read_lines("live_hosts.txt")
             
-            has_json = json_output.exists()
+            has_json = json_output.exists() and json_output.stat().st_size > 0
             if has_json:
-                live_data = self.read_json("live_hosts.json") or []
+                live_data = self.read_jsonl("live_hosts.json")
                 await self.info(f"Found {len(live_hosts)} live hosts, {len(live_data)} with tech data")
             else:
                 await self.info(f"Found {len(live_hosts)} live hosts (no JSON details)")

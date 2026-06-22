@@ -18,13 +18,28 @@ class AiAnalysisStage(PipelineStageBase):
         try:
             artifacts = {
                 "subdomains": self.read_lines("subdomains.txt"),
-                "live_hosts": self.read_lines("live_hosts.txt"),
+                "live_hosts": [],
                 "endpoints": self.read_lines("endpoints_merged.txt"),
                 "full_urls": self.read_lines("full_urls.txt"),
                 "technologies": {},
                 "vulnerabilities": [],
                 "secrets": [],
             }
+            
+            # Read live hosts from JSONL
+            live_hosts_path = self.output_dir / "live_hosts.json"
+            if live_hosts_path.exists():
+                with open(live_hosts_path) as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            try:
+                                data = json.loads(line)
+                                url = data.get('url')
+                                if url:
+                                    artifacts["live_hosts"].append(url)
+                            except json.JSONDecodeError:
+                                continue
             
             tech_path = self.output_dir / "technologies.json"
             if tech_path.exists():

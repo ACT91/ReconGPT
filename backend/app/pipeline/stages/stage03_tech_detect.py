@@ -24,7 +24,7 @@ class TechDetectStage(PipelineStageBase):
                 await self.mark_completed(result_data)
                 return result_data
             
-            live_data = self.read_json("live_hosts.json") or []
+            live_data = self.read_jsonl("live_hosts.json") or []
             
             technologies_found = {}
             for host in live_data:

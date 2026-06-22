@@ -13,7 +13,6 @@ async def run_httpx_probe(
     cmd = [
         settings.HTTPX_PATH,
         "-l", str(input_file),
-        "-o", str(output_file),
         "-silent",
         "-status-code",
         "-tech-detect",
@@ -30,7 +29,9 @@ async def run_httpx_probe(
         cmd.extend(["-ports", ",".join(str(p) for p in ports)])
     
     if json_output:
-        cmd.extend(["-json", "-j", str(json_output)])
+        cmd.extend(["-json", "-o", str(json_output)])
+    else:
+        cmd.extend(["-o", str(output_file)])
     
     result = await run_command_async(cmd, timeout=1800)
     

@@ -14,9 +14,9 @@ class WebCrawlStage(PipelineStageBase):
         await self.mark_started()
         
         try:
-            input_file = self.output_dir / "live_hosts.txt"
+            input_file = self.output_dir / "live_hosts.json"
             if not input_file.exists():
-                return {"success": False, "error": "live_hosts.txt not found"}
+                return {"success": False, "error": "live_hosts.json not found"}
             
             # Extract URLs from JSONL format for Katana
             import json
@@ -34,7 +34,7 @@ class WebCrawlStage(PipelineStageBase):
                             continue
             
             if not urls:
-                await self.warning("No URLs found in live_hosts.txt")
+                await self.warning("No URLs found in live_hosts.json")
                 return {"success": True, "urls_count": 0}
             
             # Create plain text URL list for Katana

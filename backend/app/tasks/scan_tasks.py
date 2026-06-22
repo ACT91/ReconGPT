@@ -319,6 +319,10 @@ async def _finalize_job(job_id: str, status: ScanStatus, error: str = None):
 
 
 async def _save_results_to_db(job_id: str):
+    from urllib.parse import urlparse
+    import json
+    from app.models.subdomain import SubdomainStatus
+    
     try:
         async with async_session_factory() as session:
             result = await session.execute(
@@ -336,30 +340,36 @@ async def _save_results_to_db(job_id: str):
                 seen_names = set()
                 for line in lines:
                     line = line.strip()
-                    if line and line not in seen_names:
-                        seen_names.add(line)
+                    if not line:
+                        continue
+                    
+                    parsed = urlparse(line)
+                    name = parsed.hostname if parsed.hostname else line
+                    
+                    if line.startswith('http://') or line.startswith('https://'):
+                        continue
+                    
+                    if name and name not in seen_names:
+                        seen_names.add(name)
                         existing = await session.execute(
                             select(Subdomain).where(
                                 Subdomain.scan_job_id == job.id,
-                                Subdomain.name == line,
+                                Subdomain.name == name,
                             )
                         )
                         if not existing.scalar_one_or_none():
                             sd = Subdomain(
                                 scan_job_id=job.id,
-                                name=line,
+                                name=name,
                             )
                             session.add(sd)
             
             live_hosts_json = storage_path / "live_hosts.json"
             live_hosts_txt = storage_path / "live_hosts.txt"
-            from app.models.subdomain import SubdomainStatus
-            from urllib.parse import urlparse
             
             live_hosts_set = set()
             
             if live_hosts_json.exists() and live_hosts_json.stat().st_size > 0:
-                import json
                 with open(live_hosts_json) as f:
                     for line in f:
                         line = line.strip()
@@ -435,7 +445,6 @@ async def _save_results_to_db(job_id: str):
                 ("endpoints_api.txt", EndpointSource.JS_MINING),
             ]
             seen_endpoint_urls = set()
-            from urllib.parse import urlparse
             
             for filename, source in source_file_mapping:
                 source_path = storage_path / filename
@@ -495,7 +504,6 @@ async def _save_results_to_db(job_id: str):
             
             nuclei_file = storage_path / "nuclei_results.json"
             if nuclei_file.exists():
-                import json
                 with open(nuclei_file) as f:
                     for line in f:
                         line = line.strip()
@@ -524,7 +532,6 @@ async def _save_results_to_db(job_id: str):
             
             insights_file = storage_path / "ai_insights.json"
             if insights_file.exists():
-                import json
                 with open(insights_file) as f:
                     insights_data = json.load(f)
                 if isinstance(insights_data, list):

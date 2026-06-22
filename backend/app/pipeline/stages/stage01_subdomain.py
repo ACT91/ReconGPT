@@ -35,7 +35,18 @@ class SubdomainEnumStage(PipelineStageBase):
             gau_result = await run_gau(self.target, gau_file)
             
             if gau_result.get("success"):
-                gau_subdomains = self.read_lines("subdomains_gau.txt")
+                gau_lines = self.read_lines("subdomains_gau.txt")
+                from urllib.parse import urlparse
+                gau_subdomains = set()
+                for line in gau_lines:
+                    if line.startswith('http://') or line.startswith('https://'):
+                        parsed = urlparse(line)
+                        if parsed.hostname and parsed.hostname.endswith(self.target):
+                            gau_subdomains.add(parsed.hostname)
+                    elif '.' in line and not line.startswith('/'):
+                        gau_subdomains.add(line)
+                
+                gau_subdomains = list(gau_subdomains)
                 all_subdomains.extend(gau_subdomains)
                 await self.info(f"Gau found {len(gau_subdomains)} additional subdomains")
             else:

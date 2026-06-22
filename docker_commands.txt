@@ -131,3 +131,10 @@ Run all commands from the project root directory.
                                       change ports in docker-compose.yml.
 
 ====================================================================
+
+
+
+
+docker compose up -d --build beat
+docker cp frontend/nginx.conf reconny-frontend:/etc/nginx/conf.d/default.conf
+docker exec reconny-frontend nginx -s reload
