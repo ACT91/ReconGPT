@@ -364,6 +364,8 @@ async def _save_results_to_db(job_id: str):
                             )
                             session.add(sd)
             
+            await session.flush()
+            
             live_hosts_json = storage_path / "live_hosts.json"
             live_hosts_txt = storage_path / "live_hosts.txt"
             
