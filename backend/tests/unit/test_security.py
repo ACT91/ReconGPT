@@ -66,6 +66,7 @@ class TestRateLimiting:
         import asyncio
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
+        client = None
         try:
             client = loop.run_until_complete(redis.from_url("redis://localhost:6379/0"))
             limiter = RateLimiter(client)
@@ -74,9 +75,15 @@ class TestRateLimiting:
             )
             assert isinstance(is_allowed, bool)
             assert isinstance(remaining, int)
-            loop.run_until_complete(client.close())
         except Exception:
             pytest.skip("Redis not available")
+        finally:
+            if client:
+                try:
+                    loop.run_until_complete(client.aclose())
+                except Exception:
+                    pass
+            loop.close()
 
 
 class TestExceptions:

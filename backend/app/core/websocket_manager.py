@@ -1,4 +1,5 @@
 import json
+import time
 from typing import Dict, List, Set, Any, Optional
 from uuid import UUID
 import asyncio
@@ -30,6 +31,22 @@ class ConnectionManager:
             logger.warning("websocket_redis_unavailable", error=str(e))
             self.redis_client = None
             self.pubsub = None
+
+    async def shutdown(self):
+        if self._pubsub_task:
+            self._pubsub_task.cancel()
+            try:
+                await self._pubsub_task
+            except asyncio.CancelledError:
+                pass
+            self._pubsub_task = None
+        if self.pubsub:
+            await self.pubsub.unsubscribe("scan_updates")
+            await self.pubsub.close()
+            self.pubsub = None
+        if self.redis_client:
+            await self.redis_client.aclose()
+            self.redis_client = None
 
     async def _listen_for_updates(self):
         if not self.pubsub:
@@ -81,7 +98,7 @@ class ConnectionManager:
             "stage": stage,
             "progress": progress,
             "message": message,
-            "timestamp": asyncio.get_event_loop().time(),
+            "timestamp": time.time(),
         }
         if self.redis_client:
             await self.redis_client.publish("scan_updates", json.dumps(payload))
@@ -101,7 +118,7 @@ class ConnectionManager:
             "level": level,
             "message": message,
             "details": details,
-            "timestamp": asyncio.get_event_loop().time(),
+            "timestamp": time.time(),
         }
         if self.redis_client:
             await self.redis_client.publish("scan_updates", json.dumps(payload))
@@ -112,7 +129,7 @@ class ConnectionManager:
             "type": "status",
             "status": status,
             "error": error,
-            "timestamp": asyncio.get_event_loop().time(),
+            "timestamp": time.time(),
         }
         if self.redis_client:
             await self.redis_client.publish("scan_updates", json.dumps(payload))
@@ -130,7 +147,7 @@ async def broadcast_pipeline_event(
         "job_id": str(job_id),
         "type": event_type,
         "data": data,
-        "timestamp": asyncio.get_event_loop().time(),
+        "timestamp": time.time(),
     }
     if manager.redis_client:
         await manager.redis_client.publish("scan_updates", json.dumps(payload))
