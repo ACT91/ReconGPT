@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document summarizes 25 security vulnerability fixes applied across the codebase.
+This document summarizes 36 security vulnerability fixes applied across the codebase.
 
 ---
 
@@ -105,6 +105,55 @@ This document summarizes 25 security vulnerability fixes applied across the code
 
 ---
 
+---
+
+## LOW Severity (11 issues)
+
+### CWE-703 — Improper Error Handling
+
+#### `backend/app/integrations/gau.py` (Ln 46)
+- **Issue**: Bare `except Exception: continue` swallowed all errors including `ValueError` from malformed URLs, masking failures
+- **Fix**: Changed to `except ValueError:` with structured warning log; added `_logger` with context
+
+#### `backend/app/pipeline/stages/stage08_js_analysis.py` (Ln 87)
+- **Issue**: Bare `except Exception: continue` in JS file analysis loop silently skipped files on any error
+- **Fix**: Changed to `except (OSError, UnicodeDecodeError, re.error)` with `await self.warning()` log
+
+### CWE-20/436 — Improper Input Validation / Package Vulnerability
+
+#### `backend/requirements.txt` (Ln 22 — `python-multipart==0.0.6`)
+- **Fix**: Updated `python-multipart` to `>=0.0.7`
+
+### High Coupling (Code Quality — Reduces Attack Surface via Complexity)
+
+#### `backend/app/api/routes/data.py` (Ln 107, 185, 261)
+- **Issue**: `list_endpoints`, `list_vulnerabilities`, `list_insights` each contained inline dict-building boilerplate for ORM objects and pagination responses, creating high coupling
+- **Fix**: Extracted `_subdomain_to_dict`, `_endpoint_to_dict`, `_vulnerability_to_dict`, `_insight_to_dict`, and `_build_paginated_response` helpers; all endpoint handlers now use these single-responsibility functions
+
+#### `backend/app/api/routes/insights.py` (Ln 30)
+- **Issue**: `get_job_insights` and 4 other endpoints duplicated the job existence check with inline `select(ScanJob)...` pattern
+- **Fix**: Extracted `_get_job_or_404(db, job_id, user_id)` helper; all 5 endpoints now call it instead of repeating the query
+
+#### `backend/app/pipeline/stages/stage07_js_download.py` (Ln 20)
+- **Issue**: `execute` method contained all download logic inline including nested async closure with mutable `nonlocal` counters
+- **Fix**: Extracted `_download_single_js` class method returning `(downloaded, failed)` tuple; `execute` now aggregates results with `asyncio.gather`
+
+#### `backend/app/services/scan.py` (Ln 80)
+- **Issue**: `list_user_scans` manually handled sort and pagination inline with low-level `getattr` and `order_by` calls
+- **Fix**: Extracted `_apply_sort` and `_apply_pagination` helper methods reused across the class
+
+### Global Variables
+
+#### `backend/app/core/rate_limit.py` (Ln 13)
+- **Issue**: Module-level `_redis_available: Optional[bool]` global could be mutated concurrently from multiple coroutines
+- **Fix**: Encapsulated inside `_RedisState` class with instance attribute
+
+#### `backend/app/tasks/scan_tasks.py` (Ln 46)
+- **Issue**: Module-level `_worker_loop` global used to cache the asyncio event loop was a mutable shared global
+- **Fix**: Encapsulated inside `_WorkerLoopState` class with instance attribute
+
+---
+
 ## Files Modified
 
 | File | Severity | CWEs |
@@ -121,7 +170,14 @@ This document summarizes 25 security vulnerability fixes applied across the code
 | `frontend/src/services/api.ts` | HIGH | CWE-79, 80, 918 |
 | `backend/app/core/websocket_manager.py` | MEDIUM | CWE-400, 664 |
 | `backend/tests/unit/test_security.py` | MEDIUM | CWE-400, 664 |
-| `backend/requirements.txt` | HIGH + MEDIUM | CWE-22, 379, 400, 937, 1035, 1333 |
+| `backend/app/core/rate_limit.py` | LOW | Global variable |
+| `backend/app/integrations/gau.py` | LOW | CWE-703 |
+| `backend/app/pipeline/stages/stage07_js_download.py` | LOW | High coupling |
+| `backend/app/pipeline/stages/stage08_js_analysis.py` | LOW | CWE-703 |
+| `backend/app/services/scan.py` | LOW | High coupling |
+| `backend/app/api/routes/data.py` | LOW | High coupling |
+| `backend/app/api/routes/insights.py` | LOW | High coupling |
+| `backend/requirements.txt` | HIGH + MEDIUM + LOW | CWE-20, 22, 379, 400, 436, 937, 1035, 1333 |
 | `frontend/package.json` | HIGH + MEDIUM | CWE-73, 93, 346, 400, 522, 770, 937, 1035, 1333 |
 
 ---

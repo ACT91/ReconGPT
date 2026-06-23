@@ -26,6 +26,19 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/insights", tags=["AI Insights"])
 
 
+async def _get_job_or_404(db: AsyncSession, job_id: UUID, user_id: UUID) -> ScanJob:
+    result = await db.execute(
+        select(ScanJob).where(ScanJob.id == job_id, ScanJob.owner_id == user_id)
+    )
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Scan job not found",
+        )
+    return job
+
+
 @router.get("/{job_id}", response_model=AiInsightListResponse)
 async def get_job_insights(
     job_id: UUID,
@@ -37,16 +50,7 @@ async def get_job_insights(
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = Depends(rate_limit),
 ):
-    result = await db.execute(
-        select(ScanJob).where(ScanJob.id == job_id, ScanJob.owner_id == current_user.id)
-    )
-    job = result.scalar_one_or_none()
-    
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Scan job not found",
-        )
+    await _get_job_or_404(db, job_id, current_user.id)
     
     query = select(AiInsight).where(AiInsight.scan_job_id == job_id)
     
@@ -85,17 +89,7 @@ async def get_executive_summary(
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = Depends(rate_limit),
 ):
-    result = await db.execute(
-        select(ScanJob).where(ScanJob.id == job_id, ScanJob.owner_id == current_user.id)
-    )
-    job = result.scalar_one_or_none()
-    
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Scan job not found",
-        )
-    
+    await _get_job_or_404(db, job_id, current_user.id)
     result = await db.execute(
         select(AiInsight)
         .where(
@@ -128,17 +122,7 @@ async def get_risk_score(
     from app.models.endpoint import Endpoint
     from app.models.vulnerability import Vulnerability, VulnerabilitySeverity
     
-    result = await db.execute(
-        select(ScanJob).where(ScanJob.id == job_id, ScanJob.owner_id == current_user.id)
-    )
-    job = result.scalar_one_or_none()
-    
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Scan job not found",
-        )
-    
+    await _get_job_or_404(db, job_id, current_user.id)
     subdomains = await db.execute(
         select(Subdomain).where(Subdomain.scan_job_id == job_id)
     )
@@ -203,17 +187,7 @@ async def get_attack_vectors(
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = Depends(rate_limit),
 ):
-    result = await db.execute(
-        select(ScanJob).where(ScanJob.id == job_id, ScanJob.owner_id == current_user.id)
-    )
-    job = result.scalar_one_or_none()
-    
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Scan job not found",
-        )
-    
+    await _get_job_or_404(db, job_id, current_user.id)
     result = await db.execute(
         select(AiInsight)
         .where(
@@ -255,17 +229,7 @@ async def get_insight_detail(
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = Depends(rate_limit),
 ):
-    result = await db.execute(
-        select(ScanJob).where(ScanJob.id == job_id, ScanJob.owner_id == current_user.id)
-    )
-    job = result.scalar_one_or_none()
-    
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Scan job not found",
-        )
-    
+    await _get_job_or_404(db, job_id, current_user.id)
     result = await db.execute(
         select(AiInsight).where(
             AiInsight.id == insight_id,
@@ -292,17 +256,7 @@ async def update_insight(
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = Depends(rate_limit),
 ):
-    result = await db.execute(
-        select(ScanJob).where(ScanJob.id == job_id, ScanJob.owner_id == current_user.id)
-    )
-    job = result.scalar_one_or_none()
-    
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Scan job not found",
-        )
-    
+    await _get_job_or_404(db, job_id, current_user.id)
     result = await db.execute(
         select(AiInsight).where(
             AiInsight.id == insight_id,

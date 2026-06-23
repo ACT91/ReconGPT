@@ -23,6 +23,94 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/data", tags=["Data"])
 
 
+def _subdomain_to_dict(s: Subdomain) -> dict:
+    return {
+        "id": str(s.id),
+        "scan_job_id": str(s.scan_job_id),
+        "name": s.name,
+        "is_alive": s.is_alive,
+        "status_code": s.status_code,
+        "technologies": s.technologies,
+        "title": s.title,
+        "web_server": s.web_server,
+        "ips": s.ips,
+        "cname": s.cname,
+        "content_length": s.content_length,
+        "discovered_at": s.discovered_at.isoformat() if s.discovered_at else None,
+    }
+
+
+def _endpoint_to_dict(e: Endpoint) -> dict:
+    return {
+        "id": str(e.id),
+        "scan_job_id": str(e.scan_job_id),
+        "subdomain_id": str(e.subdomain_id) if e.subdomain_id else None,
+        "url": e.url,
+        "normalized_url": e.normalized_url,
+        "path": e.path,
+        "method": e.method,
+        "source": e.source,
+        "status_code": e.status_code,
+        "content_type": e.content_type,
+        "content_length": e.content_length,
+        "title": e.title,
+        "technologies": e.technologies,
+        "response_time_ms": e.response_time_ms,
+        "discovered_at": e.discovered_at.isoformat() if e.discovered_at else None,
+    }
+
+
+def _vulnerability_to_dict(v: Vulnerability) -> dict:
+    return {
+        "id": str(v.id),
+        "scan_job_id": str(v.scan_job_id),
+        "endpoint_id": str(v.endpoint_id) if v.endpoint_id else None,
+        "name": v.name,
+        "template_id": v.template_id,
+        "severity": v.severity.value,
+        "url": v.url,
+        "description": v.description,
+        "remediation": v.remediation,
+        "cve_ids": v.cve_ids,
+        "cwe_ids": v.cwe_ids,
+        "cvss_score": v.cvss_score,
+        "cvss_vector": v.cvss_vector,
+        "matched_at": v.matched_at,
+        "is_false_positive": bool(v.is_false_positive),
+        "discovered_at": v.discovered_at.isoformat() if v.discovered_at else None,
+    }
+
+
+def _insight_to_dict(i: AiInsight) -> dict:
+    return {
+        "id": str(i.id),
+        "scan_job_id": str(i.scan_job_id),
+        "type": i.insight_type.value,
+        "priority": i.priority.value,
+        "priority_score": i.priority_score,
+        "title": i.title,
+        "summary": i.summary,
+        "content": i.content,
+        "is_actionable": i.is_actionable,
+        "is_dismissed": i.is_dismissed,
+        "affected_assets": i.affected_assets,
+        "related_vulnerabilities": i.related_vulnerabilities,
+        "related_subdomains": i.related_subdomains,
+        "related_endpoints": i.related_endpoints,
+        "created_at": i.created_at.isoformat() if i.created_at else None,
+    }
+
+
+def _build_paginated_response(items: list, total: int, page: int, page_size: int) -> dict:
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size if page_size else 1,
+    }
+
+
 async def _get_user_job_ids(db: AsyncSession, user_id: UUID, project_id: Optional[UUID] = None) -> List[UUID]:
     query = select(ScanJob.id).where(ScanJob.owner_id == user_id)
     if project_id:
@@ -77,30 +165,9 @@ async def list_subdomains(
     query = query.offset((pagination.page - 1) * pagination.page_size).limit(pagination.page_size)
 
     result = await db.execute(query)
-    items = []
-    for s in result.scalars().all():
-        items.append({
-            "id": str(s.id),
-            "scan_job_id": str(s.scan_job_id),
-            "name": s.name,
-            "is_alive": s.is_alive,
-            "status_code": s.status_code,
-            "technologies": s.technologies,
-            "title": s.title,
-            "web_server": s.web_server,
-            "ips": s.ips,
-            "cname": s.cname,
-            "content_length": s.content_length,
-            "discovered_at": s.discovered_at.isoformat() if s.discovered_at else None,
-        })
+    items = [_subdomain_to_dict(s) for s in result.scalars().all()]
 
-    return {
-        "items": items,
-        "total": total,
-        "page": pagination.page,
-        "page_size": pagination.page_size,
-        "total_pages": (total + pagination.page_size - 1) // pagination.page_size if pagination.page_size else 1,
-    }
+    return _build_paginated_response(items, total, pagination.page, pagination.page_size)
 
 
 @router.get("/endpoints")
@@ -152,33 +219,9 @@ async def list_endpoints(
     query = query.offset((pagination.page - 1) * pagination.page_size).limit(pagination.page_size)
 
     result = await db.execute(query)
-    items = []
-    for e in result.scalars().all():
-        items.append({
-            "id": str(e.id),
-            "scan_job_id": str(e.scan_job_id),
-            "subdomain_id": str(e.subdomain_id) if e.subdomain_id else None,
-            "url": e.url,
-            "normalized_url": e.normalized_url,
-            "path": e.path,
-            "method": e.method,
-            "source": e.source,
-            "status_code": e.status_code,
-            "content_type": e.content_type,
-            "content_length": e.content_length,
-            "title": e.title,
-            "technologies": e.technologies,
-            "response_time_ms": e.response_time_ms,
-            "discovered_at": e.discovered_at.isoformat() if e.discovered_at else None,
-        })
+    items = [_endpoint_to_dict(e) for e in result.scalars().all()]
 
-    return {
-        "items": items,
-        "total": total,
-        "page": pagination.page,
-        "page_size": pagination.page_size,
-        "total_pages": (total + pagination.page_size - 1) // pagination.page_size if pagination.page_size else 1,
-    }
+    return _build_paginated_response(items, total, pagination.page, pagination.page_size)
 
 
 @router.get("/vulnerabilities")
@@ -227,34 +270,9 @@ async def list_vulnerabilities(
     query = query.offset((pagination.page - 1) * pagination.page_size).limit(pagination.page_size)
 
     result = await db.execute(query)
-    items = []
-    for v in result.scalars().all():
-        items.append({
-            "id": str(v.id),
-            "scan_job_id": str(v.scan_job_id),
-            "endpoint_id": str(v.endpoint_id) if v.endpoint_id else None,
-            "name": v.name,
-            "template_id": v.template_id,
-            "severity": v.severity.value,
-            "url": v.url,
-            "description": v.description,
-            "remediation": v.remediation,
-            "cve_ids": v.cve_ids,
-            "cwe_ids": v.cwe_ids,
-            "cvss_score": v.cvss_score,
-            "cvss_vector": v.cvss_vector,
-            "matched_at": v.matched_at,
-            "is_false_positive": bool(v.is_false_positive),
-            "discovered_at": v.discovered_at.isoformat() if v.discovered_at else None,
-        })
+    items = [_vulnerability_to_dict(v) for v in result.scalars().all()]
 
-    return {
-        "items": items,
-        "total": total,
-        "page": pagination.page,
-        "page_size": pagination.page_size,
-        "total_pages": (total + pagination.page_size - 1) // pagination.page_size if pagination.page_size else 1,
-    }
+    return _build_paginated_response(items, total, pagination.page, pagination.page_size)
 
 
 @router.get("/insights")
@@ -309,33 +327,9 @@ async def list_insights(
     query = query.offset((pagination.page - 1) * pagination.page_size).limit(pagination.page_size)
 
     result = await db.execute(query)
-    items = []
-    for i in result.scalars().all():
-        items.append({
-            "id": str(i.id),
-            "scan_job_id": str(i.scan_job_id),
-            "type": i.insight_type.value,
-            "priority": i.priority.value,
-            "priority_score": i.priority_score,
-            "title": i.title,
-            "summary": i.summary,
-            "content": i.content,
-            "is_actionable": i.is_actionable,
-            "is_dismissed": i.is_dismissed,
-            "affected_assets": i.affected_assets,
-            "related_vulnerabilities": i.related_vulnerabilities,
-            "related_subdomains": i.related_subdomains,
-            "related_endpoints": i.related_endpoints,
-            "created_at": i.created_at.isoformat() if i.created_at else None,
-        })
+    items = [_insight_to_dict(i) for i in result.scalars().all()]
 
-    return {
-        "items": items,
-        "total": total,
-        "page": pagination.page,
-        "page_size": pagination.page_size,
-        "total_pages": (total + pagination.page_size - 1) // pagination.page_size if pagination.page_size else 1,
-    }
+    return _build_paginated_response(items, total, pagination.page, pagination.page_size)
 
 
 @router.get("/stats")

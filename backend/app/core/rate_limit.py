@@ -6,21 +6,23 @@ from app.core.logger import get_logger
 
 logger = get_logger(__name__)
 
-_redis_available: Optional[bool] = None
+class _RedisState:
+    available: Optional[bool] = None
+
+_redis_state = _RedisState()
 
 
 async def _get_redis():
-    global _redis_available
     try:
         import redis.asyncio as redis
         client = redis.from_url(str(settings.REDIS_URL), socket_connect_timeout=2)
         await client.ping()
-        _redis_available = True
+        _redis_state.available = True
         return client
     except Exception as e:
-        if _redis_available is not False:
+        if _redis_state.available is not False:
             logger.warning("rate_limit_redis_unavailable", error=str(e))
-            _redis_available = False
+            _redis_state.available = False
         return None
 
 

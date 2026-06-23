@@ -39,14 +39,16 @@ from app.ai.service import save_insights_to_db
 logger = get_logger(__name__)
 
 
-_worker_loop = None
+class _WorkerLoopState:
+    loop = None
+
+_worker_state = _WorkerLoopState()
 
 
 def _get_loop():
-    global _worker_loop
-    if _worker_loop is None:
-        _worker_loop = asyncio.new_event_loop()
-    return _worker_loop
+    if _worker_state.loop is None:
+        _worker_state.loop = asyncio.new_event_loop()
+    return _worker_state.loop
 
 
 def run_async(coro):

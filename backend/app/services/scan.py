@@ -31,6 +31,19 @@ class ScanService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def _apply_sort(self, query, sort_param: Optional[str], model, default_field: str, default_dir: str = "desc"):
+        if sort_param:
+            field, direction = parse_sort_param(sort_param, default_field, default_dir)
+            sort_field = getattr(model, field, getattr(model, default_field))
+            order_fn = asc if direction == "asc" else desc
+            return query.order_by(order_fn(sort_field))
+        return query.order_by(desc(getattr(model, default_field)))
+
+    async def _apply_pagination(self, query, pagination: Optional[PaginationParams]):
+        if pagination:
+            return query.offset((pagination.page - 1) * pagination.page_size).limit(pagination.page_size)
+        return query
+
     async def create_scan_job(
         self,
         user_id: UUID,
@@ -98,16 +111,8 @@ class ScanService:
         total_result = await self.db.execute(count_query)
         total = total_result.scalar() or 0
         
-        if pagination and pagination.sort:
-            field, direction = parse_sort_param(pagination.sort, "created_at", "desc")
-            sort_field = getattr(ScanJob, field, ScanJob.created_at)
-            order_fn = asc if direction == "asc" else desc
-            query = query.order_by(order_fn(sort_field))
-        else:
-            query = query.order_by(desc(ScanJob.created_at))
-        
-        if pagination:
-            query = query.offset((pagination.page - 1) * pagination.page_size).limit(pagination.page_size)
+        query = await self._apply_sort(query, pagination.sort if pagination else None, ScanJob, "created_at", "desc")
+        query = await self._apply_pagination(query, pagination)
         
         result = await self.db.execute(query)
         jobs = result.scalars().all()

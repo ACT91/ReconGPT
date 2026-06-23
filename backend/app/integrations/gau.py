@@ -36,6 +36,8 @@ async def run_gau(
         urls_count = len(lines)
         
         from urllib.parse import urlparse
+        from app.core.logger import get_logger
+        _logger = get_logger(__name__)
         unique_domains = set()
         for line in lines:
             try:
@@ -43,7 +45,8 @@ async def run_gau(
                 host = parsed.hostname or ""
                 if host.endswith(domain):
                     unique_domains.add(host)
-            except Exception:
+            except ValueError:
+                _logger.warning("gau_url_parse_failed", url=line[:200])
                 continue
         subdomain_count = len(unique_domains)
     

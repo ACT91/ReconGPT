@@ -84,7 +84,8 @@ class JsAnalysisStage(PipelineStageBase):
                                     "file": js_file.name,
                                 })
                 
-                except Exception:
+                except (OSError, UnicodeDecodeError, re.error) as e:
+                    await self.warning(f"Failed to analyze {js_file.name}: {e}")
                     continue
             
             self.write_lines("endpoints_hidden.txt", sorted(hidden_endpoints))
