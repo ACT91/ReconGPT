@@ -165,6 +165,43 @@ async def _update_job_failed(job_id: str, error: str):
             await session.commit()
 
 
+def _should_skip_stage(job_id: str, stage: PipelineStage) -> bool:
+    config_key = CONFIG_SKIP_STAGES.get(stage)
+    if not config_key:
+        return False
+    stage_config = run_async(_get_job_config(job_id))
+    return not stage_config.get(config_key, True)
+
+
+def _run_stage(job_id: str, stage: PipelineStage, idx: int, total: int, is_last: bool):
+    run_async(_emit_pipeline_event(job_id, "stage_started",
+        {"stage": stage.value, "stage_index": idx, "total_stages": total}))
+    logger.info("pipeline_stage_starting", job_id=job_id, stage=stage.value, progress=f"{(idx / total) * 100:.1f}%")
+    return execute_scan_stage(job_id, stage.value)
+
+
+def _handle_stage_result(job_id: str, stage: PipelineStage, result: dict, idx: int, total: int, is_last: bool):
+    if run_async(_check_job_cancelled(job_id)):
+        logger.info("pipeline_cancelled", job_id=job_id)
+        run_async(_emit_pipeline_event(job_id, "pipeline_cancelled", {}))
+        return {"success": False, "error": "Cancelled"}
+    if not result.get("success"):
+        if is_last:
+            run_async(_finalize_job(job_id, ScanStatus.PARTIAL))
+            run_async(_emit_pipeline_event(job_id, "pipeline_partial", {"failed_stage": stage.value}))
+            logger.warning("pipeline_partial_complete", job_id=job_id, failed_stage=stage.value)
+            return {"success": True, "partial": True, "failed_stage": stage.value}
+        logger.error("pipeline_failed", job_id=job_id, failed_stage=stage.value)
+        run_async(_emit_pipeline_event(job_id, "pipeline_failed", {"failed_stage": stage.value}))
+        return result
+    progress = ((idx + 1) / total) * 100
+    run_async(_update_job_progress(job_id, stage, progress))
+    run_async(_emit_pipeline_event(job_id, "stage_completed",
+        {"stage": stage.value, "stage_index": idx, "progress": progress}))
+    logger.info("pipeline_stage_completed", job_id=job_id, stage=stage.value, progress=f"{progress:.1f}%")
+    return None
+
+
 @celery_app.task(name="execute_full_pipeline", bind=True, max_retries=3, default_retry_delay=60)
 def execute_full_pipeline(self, job_id: str):
     try:
@@ -177,62 +214,16 @@ def execute_full_pipeline(self, job_id: str):
         for idx, stage in enumerate(stages):
             is_last = (idx == stage_count - 1)
             
-            stage_progress = (idx / stage_count) * 100
+            if _should_skip_stage(job_id, stage):
+                logger.info("stage_skipped_by_config", job_id=job_id, stage=stage.value)
+                run_async(_emit_pipeline_event(job_id, "stage_skipped", {"stage": stage.value}))
+                run_async(_update_job_progress(job_id, stage, ((idx + 1) / stage_count) * 100))
+                continue
             
-            config_key = CONFIG_SKIP_STAGES.get(stage)
-            if config_key:
-                stage_config = run_async(_get_job_config(job_id))
-                if not stage_config.get(config_key, True):
-                    logger.info("stage_skipped_by_config", job_id=job_id, stage=stage.value, config_key=config_key)
-                    run_async(_emit_pipeline_event(job_id, "stage_skipped", {"stage": stage.value}))
-                    run_async(_update_job_progress(job_id, stage, ((idx + 1) / stage_count) * 100))
-                    continue
-            
-            run_async(_emit_pipeline_event(
-                job_id, "stage_started",
-                {"stage": stage.value, "stage_index": idx, "total_stages": stage_count},
-            ))
-            
-            logger.info(
-                "pipeline_stage_starting",
-                job_id=job_id,
-                stage=stage.value,
-                progress=f"{stage_progress:.1f}%",
-            )
-            
-            result = execute_scan_stage(job_id, stage.value)
-            
-            is_cancelled = run_async(_check_job_cancelled(job_id))
-            if is_cancelled:
-                logger.info("pipeline_cancelled", job_id=job_id)
-                run_async(_emit_pipeline_event(job_id, "pipeline_cancelled", {}))
-                return {"success": False, "error": "Cancelled"}
-            
-            if not result.get("success"):
-                if is_last:
-                    run_async(_finalize_job(job_id, ScanStatus.PARTIAL))
-                    run_async(_emit_pipeline_event(job_id, "pipeline_partial", {"failed_stage": stage.value}))
-                    logger.warning("pipeline_partial_complete", job_id=job_id, failed_stage=stage.value)
-                    return {"success": True, "partial": True, "failed_stage": stage.value}
-                else:
-                    logger.error("pipeline_failed", job_id=job_id, failed_stage=stage.value)
-                    run_async(_emit_pipeline_event(job_id, "pipeline_failed", {"failed_stage": stage.value}))
-                    return result
-            
-            progress = ((idx + 1) / stage_count) * 100
-            run_async(_update_job_progress(job_id, stage, progress))
-            
-            run_async(_emit_pipeline_event(
-                job_id, "stage_completed",
-                {"stage": stage.value, "stage_index": idx, "progress": progress},
-            ))
-            
-            logger.info(
-                "pipeline_stage_completed",
-                job_id=job_id,
-                stage=stage.value,
-                progress=f"{progress:.1f}%",
-            )
+            result = _run_stage(job_id, stage, idx, stage_count, is_last)
+            error = _handle_stage_result(job_id, stage, result, idx, stage_count, is_last)
+            if error:
+                return error
         
         run_async(_finalize_job(job_id, ScanStatus.COMPLETED))
         run_async(_save_results_to_db(job_id))
@@ -320,16 +311,165 @@ async def _finalize_job(job_id: str, status: ScanStatus, error: str = None):
             await session.commit()
 
 
-async def _save_results_to_db(job_id: str):
+async def _save_subdomains(session, job, storage_path):
     from urllib.parse import urlparse
-    import json
+    subdomains_file = storage_path / "subdomains.txt"
+    if not subdomains_file.exists():
+        return
+    lines = subdomains_file.read_text(encoding="utf-8", errors="ignore").split('\n')
+    seen_names = set()
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith('http://') or line.startswith('https://'):
+            continue
+        parsed = urlparse(line)
+        name = parsed.hostname if parsed.hostname else line
+        if name and name not in seen_names:
+            seen_names.add(name)
+            existing = await session.execute(
+                select(Subdomain).where(Subdomain.scan_job_id == job.id, Subdomain.name == name)
+            )
+            if not existing.scalar_one_or_none():
+                session.add(Subdomain(scan_job_id=job.id, name=name))
+
+
+async def _save_live_hosts(session, job, storage_path):
+    from urllib.parse import urlparse
     from app.models.subdomain import SubdomainStatus
+    live_hosts_json = storage_path / "live_hosts.json"
+    live_hosts_txt = storage_path / "live_hosts.txt"
+    live_hosts_set = set()
+    if live_hosts_json.exists() and live_hosts_json.stat().st_size > 0:
+        with open(live_hosts_json) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    host = json.loads(line)
+                    if not isinstance(host, dict):
+                        continue
+                    url = host.get("url") or host.get("host") or host.get("input")
+                    if not url:
+                        continue
+                    name = urlparse(url).hostname if url.startswith("http") else url
+                    if not name:
+                        continue
+                    live_hosts_set.add(name)
+                    sub = (await session.execute(
+                        select(Subdomain).where(Subdomain.scan_job_id == job.id, Subdomain.name == name)
+                    )).scalar_one_or_none()
+                    if sub:
+                        sub.is_alive = True
+                        sub.status_code = host.get("status_code")
+                        sub.title = host.get("title")
+                        sub.web_server = host.get("webserver")
+                        sub.content_length = host.get("content_length")
+                        sub.technologies = host.get("tech", [])
+                        sub.ips = host.get("a", [])
+                        sub.cname = host.get("cname", [None])[0] if host.get("cname") else None
+                        sub.probed_at = datetime.now(timezone.utc)
+                        sub.status = SubdomainStatus.ALIVE
+                except json.JSONDecodeError as je:
+                    logger.warning("live_hosts_json_parse_failed", job_id=str(job.id), error=str(je), line=line[:200])
+    elif live_hosts_txt.exists():
+        with open(live_hosts_txt) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                name = urlparse(line).hostname if line.startswith("http") else line
+                live_hosts_set.add(name)
+                sd = (await session.execute(
+                    select(Subdomain).where(Subdomain.scan_job_id == job.id, Subdomain.name == name)
+                )).scalar_one_or_none()
+                if sd:
+                    sd.is_alive = True
+                    sd.probed_at = datetime.now(timezone.utc)
+                    sd.status = SubdomainStatus.ALIVE
+    for sd in (await session.execute(select(Subdomain).where(Subdomain.scan_job_id == job.id))).scalars().all():
+        if sd.name not in live_hosts_set:
+            sd.is_alive = False
+            sd.status = SubdomainStatus.DEAD
+
+
+async def _save_endpoints_from_files(session, job, storage_path):
+    from urllib.parse import urlparse
+    from app.models.endpoint import EndpointSource
+    source_file_mapping = [
+        ("endpoints_crawl.txt", EndpointSource.CRAWL),
+        ("endpoints_hidden.txt", EndpointSource.JS_MINING),
+        ("endpoints_api.txt", EndpointSource.JS_MINING),
+    ]
+    seen_endpoint_urls = set()
+    for filename, source in source_file_mapping:
+        source_path = storage_path / filename
+        if source_path.exists():
+            for line in source_path.read_text(encoding="utf-8", errors="ignore").split('\n'):
+                line = line.strip()
+                if not line:
+                    continue
+                normalized = line.rstrip('/')
+                if normalized in seen_endpoint_urls:
+                    continue
+                seen_endpoint_urls.add(normalized)
+                existing = await session.execute(
+                    select(Endpoint).where(Endpoint.scan_job_id == job.id, Endpoint.normalized_url == normalized)
+                )
+                if not existing.scalar_one_or_none():
+                    parsed = urlparse(line)
+                    session.add(Endpoint(scan_job_id=job.id, url=line, normalized_url=normalized,
+                                         path=parsed.path or "/", source=source.value))
     
+    for fname in ("endpoints_merged.txt", "full_urls.txt"):
+        filepath = storage_path / fname
+        if filepath.exists():
+            for line in filepath.read_text(encoding="utf-8", errors="ignore").split('\n'):
+                line = line.strip()
+                if not line:
+                    continue
+                normalized = line.rstrip('/')
+                if normalized in seen_endpoint_urls:
+                    continue
+                seen_endpoint_urls.add(normalized)
+                existing = await session.execute(
+                    select(Endpoint).where(Endpoint.scan_job_id == job.id, Endpoint.normalized_url == normalized)
+                )
+                if not existing.scalar_one_or_none():
+                    parsed = urlparse(line)
+                    session.add(Endpoint(scan_job_id=job.id, url=line, normalized_url=normalized,
+                                         path=parsed.path or "/", source=EndpointSource.RECONSTRUCTED.value))
+
+
+async def _save_vulnerabilities(session, job, storage_path):
+    nuclei_file = storage_path / "nuclei_results.json"
+    if nuclei_file.exists():
+        with open(nuclei_file) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    v = json.loads(line)
+                    info = v.get("info", {}) or {}
+                    session.add(Vulnerability(
+                        scan_job_id=job.id, template_id=v.get("template-id", "unknown"),
+                        name=info.get("name", "Unknown Vulnerability"),
+                        severity=VulnerabilitySeverity(info.get("severity", "info").lower()),
+                        url=v.get("host", v.get("url", "")), matched_at=v.get("matched-at", ""),
+                        extracted_results=v, description=info.get("description"),
+                        remediation=info.get("remediation"),
+                        references=info.get("reference", "").split(",") if info.get("reference") else [],
+                        tags=info.get("tags", []), cvss_score=info.get("cvss-score"),
+                    ))
+                except Exception as parse_err:
+                    logger.warning("nuclei_result_parse_failed", job_id=str(job.id), error=str(parse_err), line=line[:200])
+
+
+async def _save_results_to_db(job_id: str):
     try:
         async with async_session_factory() as session:
-            result = await session.execute(
-                select(ScanJob).where(ScanJob.id == job_id)
-            )
+            result = await session.execute(select(ScanJob).where(ScanJob.id == job_id))
             job = result.scalar_one_or_none()
             if not job:
                 return
@@ -339,236 +479,11 @@ async def _save_results_to_db(job_id: str):
                 logger.error("invalid_storage_path", job_id=job_id)
                 return
             
-            subdomains_file = storage_path / "subdomains.txt"
-            if subdomains_file.exists():
-                lines = subdomains_file.read_text(encoding="utf-8", errors="ignore").split('\n')
-                seen_names = set()
-                for line in lines:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    
-                    parsed = urlparse(line)
-                    name = parsed.hostname if parsed.hostname else line
-                    
-                    if line.startswith('http://') or line.startswith('https://'):
-                        continue
-                    
-                    if name and name not in seen_names:
-                        seen_names.add(name)
-                        existing = await session.execute(
-                            select(Subdomain).where(
-                                Subdomain.scan_job_id == job.id,
-                                Subdomain.name == name,
-                            )
-                        )
-                        if not existing.scalar_one_or_none():
-                            sd = Subdomain(
-                                scan_job_id=job.id,
-                                name=name,
-                            )
-                            session.add(sd)
-            
+            await _save_subdomains(session, job, storage_path)
             await session.flush()
-            
-            live_hosts_json = storage_path / "live_hosts.json"
-            live_hosts_txt = storage_path / "live_hosts.txt"
-            
-            live_hosts_set = set()
-            
-            if live_hosts_json.exists() and live_hosts_json.stat().st_size > 0:
-                with open(live_hosts_json) as f:
-                    for line in f:
-                        line = line.strip()
-                        if not line:
-                            continue
-                        try:
-                            host = json.loads(line)
-                            if not isinstance(host, dict):
-                                continue
-                            
-                            url = host.get("url") or host.get("host") or host.get("input")
-                            if not url:
-                                continue
-                            
-                            name = urlparse(url).hostname if url.startswith("http") else url
-                            if not name:
-                                continue
-                            
-                            live_hosts_set.add(name)
-                            
-                            subdomain = await session.execute(
-                                select(Subdomain).where(
-                                    Subdomain.scan_job_id == job.id,
-                                    Subdomain.name == name,
-                                )
-                            )
-                            sd = subdomain.scalar_one_or_none()
-                            if sd:
-                                sd.is_alive = True
-                                sd.status_code = host.get("status_code")
-                                sd.title = host.get("title")
-                                sd.web_server = host.get("webserver")
-                                sd.content_length = host.get("content_length")
-                                sd.technologies = host.get("tech", [])
-                                sd.ips = host.get("a", [])
-                                sd.cname = host.get("cname", [None])[0] if host.get("cname") else None
-                                sd.probed_at = datetime.now(timezone.utc)
-                                sd.status = SubdomainStatus.ALIVE
-                        except json.JSONDecodeError as je:
-                            logger.warning("live_hosts_json_parse_failed", job_id=job_id, error=str(je), line=line[:200])
-                            continue
-            elif live_hosts_txt.exists():
-                with open(live_hosts_txt) as f:
-                    for line in f:
-                        line = line.strip()
-                        if not line:
-                            continue
-                        name = urlparse(line).hostname if line.startswith("http") else line
-                        live_hosts_set.add(name)
-                        subdomain = await session.execute(
-                            select(Subdomain).where(
-                                Subdomain.scan_job_id == job.id,
-                                Subdomain.name == name,
-                            )
-                        )
-                        sd = subdomain.scalar_one_or_none()
-                        if sd:
-                            sd.is_alive = True
-                            sd.probed_at = datetime.now(timezone.utc)
-                            sd.status = SubdomainStatus.ALIVE
-            
-            all_subdomains = await session.execute(
-                select(Subdomain).where(Subdomain.scan_job_id == job.id)
-            )
-            for sd in all_subdomains.scalars().all():
-                if sd.name not in live_hosts_set:
-                    sd.is_alive = False
-                    sd.status = SubdomainStatus.DEAD
-            
-            source_file_mapping = [
-                ("endpoints_crawl.txt", EndpointSource.CRAWL),
-                ("endpoints_hidden.txt", EndpointSource.JS_MINING),
-                ("endpoints_api.txt", EndpointSource.JS_MINING),
-            ]
-            seen_endpoint_urls = set()
-            
-            for filename, source in source_file_mapping:
-                source_path = storage_path / filename
-                if source_path.exists():
-                    lines = source_path.read_text(encoding="utf-8", errors="ignore").split('\n')
-                    for line in lines:
-                        line = line.strip()
-                        if not line:
-                            continue
-                        normalized = line.rstrip('/')
-                        if normalized in seen_endpoint_urls:
-                            continue
-                        seen_endpoint_urls.add(normalized)
-                        existing = await session.execute(
-                            select(Endpoint).where(
-                                Endpoint.scan_job_id == job.id,
-                                Endpoint.normalized_url == normalized,
-                            )
-                        )
-                        if not existing.scalar_one_or_none():
-                            parsed = urlparse(line)
-                            ep = Endpoint(
-                                scan_job_id=job.id,
-                                url=line,
-                                normalized_url=normalized,
-                                path=parsed.path or "/",
-                                source=source.value,
-                            )
-                            session.add(ep)
-
-            endpoints_file = storage_path / "endpoints_merged.txt"
-            if endpoints_file.exists():
-                lines = endpoints_file.read_text(encoding="utf-8", errors="ignore").split('\n')
-                for line in lines:
-                    line = line.strip()
-                    if line:
-                        normalized = line.rstrip('/')
-                        if normalized in seen_endpoint_urls:
-                            continue
-                        seen_endpoint_urls.add(normalized)
-                        existing = await session.execute(
-                            select(Endpoint).where(
-                                Endpoint.scan_job_id == job.id,
-                                Endpoint.normalized_url == normalized,
-                            )
-                        )
-                        if not existing.scalar_one_or_none():
-                            parsed = urlparse(line)
-                            ep = Endpoint(
-                                scan_job_id=job.id,
-                                url=line,
-                                normalized_url=normalized,
-                                path=parsed.path or "/",
-                                source=EndpointSource.RECONSTRUCTED.value,
-                            )
-                            session.add(ep)
-
-            # Save reconstructed full URLs from full_urls.txt
-            full_urls_file = storage_path / "full_urls.txt"
-            if full_urls_file.exists():
-                lines = full_urls_file.read_text(encoding="utf-8", errors="ignore").split('\n')
-                reconstructed_count = 0
-                for line in lines:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    normalized = line.rstrip('/')
-                    if normalized in seen_endpoint_urls:
-                        continue
-                    seen_endpoint_urls.add(normalized)
-                    existing = await session.execute(
-                        select(Endpoint).where(
-                            Endpoint.scan_job_id == job.id,
-                            Endpoint.normalized_url == normalized,
-                        )
-                    )
-                    if not existing.scalar_one_or_none():
-                        parsed = urlparse(line)
-                        ep = Endpoint(
-                            scan_job_id=job.id,
-                            url=line,
-                            normalized_url=normalized,
-                            path=parsed.path or "/",
-                            source=EndpointSource.RECONSTRUCTED.value,
-                        )
-                        session.add(ep)
-                        reconstructed_count += 1
-                if reconstructed_count:
-                    logger.info("reconstructed_urls_saved", job_id=job_id, count=reconstructed_count)
-            
-            nuclei_file = storage_path / "nuclei_results.json"
-            if nuclei_file.exists():
-                with open(nuclei_file) as f:
-                    for line in f:
-                        line = line.strip()
-                        if line:
-                            try:
-                                v = json.loads(line)
-                                info = v.get("info", {}) or {}
-                                vuln = Vulnerability(
-                                    scan_job_id=job.id,
-                                    template_id=v.get("template-id", "unknown"),
-                                    name=info.get("name", "Unknown Vulnerability"),
-                                    severity=VulnerabilitySeverity(info.get("severity", "info").lower()),
-                                    url=v.get("host", v.get("url", "")),
-                                    matched_at=v.get("matched-at", ""),
-                                    extracted_results=v,
-                                    description=info.get("description"),
-                                    remediation=info.get("remediation"),
-                                    references=info.get("reference", "").split(",") if info.get("reference") else [],
-                                    tags=info.get("tags", []),
-                                    cvss_score=info.get("cvss-score"),
-                                )
-                                session.add(vuln)
-                            except Exception as parse_err:
-                                logger.warning("nuclei_result_parse_failed", job_id=job_id, error=str(parse_err), line=line[:200])
-                                continue
+            await _save_live_hosts(session, job, storage_path)
+            await _save_endpoints_from_files(session, job, storage_path)
+            await _save_vulnerabilities(session, job, storage_path)
             
             insights_file = storage_path / "ai_insights.json"
             if insights_file.exists():
@@ -578,7 +493,6 @@ async def _save_results_to_db(job_id: str):
                     await save_insights_to_db(job.id, insights_data)
             
             await session.commit()
-            
     except Exception as e:
         logger.error("save_results_failed", job_id=job_id, error=str(e))
 

@@ -12,57 +12,56 @@ class AiAnalysisStage(PipelineStageBase):
     def stage_name(self) -> PipelineStage:
         return PipelineStage.AI_ANALYSIS
 
+    def _build_artifacts(self) -> Dict[str, Any]:
+        artifacts = {
+            "subdomains": self.read_lines("subdomains.txt"),
+            "live_hosts": [],
+            "endpoints": self.read_lines("endpoints_merged.txt"),
+            "full_urls": self.read_lines("full_urls.txt"),
+            "technologies": {},
+            "vulnerabilities": [],
+            "secrets": [],
+        }
+        
+        live_hosts_path = self.output_dir / "live_hosts.json"
+        if live_hosts_path.exists():
+            with open(live_hosts_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            data = json.loads(line)
+                            url = data.get('url')
+                            if url:
+                                artifacts["live_hosts"].append(url)
+                        except json.JSONDecodeError:
+                            continue
+        
+        tech_path = self.output_dir / "technologies.json"
+        if tech_path.exists():
+            with open(tech_path) as f:
+                artifacts["technologies"] = json.load(f)
+        
+        nuclei_path = self.output_dir / "nuclei_results.json"
+        if nuclei_path.exists():
+            with open(nuclei_path) as f:
+                artifacts["vulnerabilities"] = [
+                    json.loads(line) for line in f
+                    if (line := line.strip()) and not line.startswith('#')
+                ]
+        
+        secrets_path = self.output_dir / "js_secrets.json"
+        if secrets_path.exists():
+            with open(secrets_path) as f:
+                artifacts["secrets"] = json.load(f)
+        
+        return artifacts
+
     async def execute(self) -> Dict[str, Any]:
         await self.mark_started()
         
         try:
-            artifacts = {
-                "subdomains": self.read_lines("subdomains.txt"),
-                "live_hosts": [],
-                "endpoints": self.read_lines("endpoints_merged.txt"),
-                "full_urls": self.read_lines("full_urls.txt"),
-                "technologies": {},
-                "vulnerabilities": [],
-                "secrets": [],
-            }
-            
-            # Read live hosts from JSONL
-            live_hosts_path = self.output_dir / "live_hosts.json"
-            if live_hosts_path.exists():
-                with open(live_hosts_path) as f:
-                    for line in f:
-                        line = line.strip()
-                        if line:
-                            try:
-                                data = json.loads(line)
-                                url = data.get('url')
-                                if url:
-                                    artifacts["live_hosts"].append(url)
-                            except json.JSONDecodeError:
-                                continue
-            
-            tech_path = self.output_dir / "technologies.json"
-            if tech_path.exists():
-                with open(tech_path) as f:
-                    artifacts["technologies"] = json.load(f)
-            
-            nuclei_path = self.output_dir / "nuclei_results.json"
-            if nuclei_path.exists():
-                vulns = []
-                with open(nuclei_path) as f:
-                    for line in f:
-                        line = line.strip()
-                        if line:
-                            try:
-                                vulns.append(json.loads(line))
-                            except json.JSONDecodeError:
-                                continue
-                artifacts["vulnerabilities"] = vulns
-            
-            secrets_path = self.output_dir / "js_secrets.json"
-            if secrets_path.exists():
-                with open(secrets_path) as f:
-                    artifacts["secrets"] = json.load(f)
+            artifacts = self._build_artifacts()
             
             await self.info("Running AI analysis on scan results")
             analysis = await analyze_scan_results(self.target, artifacts)

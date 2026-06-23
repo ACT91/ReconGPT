@@ -32,6 +32,55 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/results", tags=["Results"])
 
 
+async def _get_job_or_404(db: AsyncSession, job_id: UUID, user_id: UUID):
+    result = await db.execute(select(ScanJob).where(ScanJob.id == job_id, ScanJob.owner_id == user_id))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan job not found")
+    return job
+
+
+def _build_tech_server_counts(sd_list, ep_list):
+    tech_counts = {}
+    server_counts = {}
+    status_codes = {}
+    for s in sd_list:
+        for t in (s.technologies or []):
+            tech_counts[t] = tech_counts.get(t, 0) + 1
+        if s.web_server:
+            server_counts[s.web_server] = server_counts.get(s.web_server, 0) + 1
+        if s.status_code:
+            c = str(s.status_code)
+            status_codes[c] = status_codes.get(c, 0) + 1
+    for e in ep_list:
+        for t in (e.technologies or []):
+            tech_counts[t] = tech_counts.get(t, 0) + 1
+        if e.status_code:
+            c = str(e.status_code)
+            status_codes[c] = status_codes.get(c, 0) + 1
+    return tech_counts, server_counts, status_codes
+
+
+def _build_vuln_subdomain_map(vuln_list, ep_list, sd_list):
+    result = {}
+    for v in vuln_list:
+        name = "unknown"
+        ep = next((e for e in ep_list if e.id == v.endpoint_id), None)
+        if ep and ep.subdomain_id:
+            sd = next((s for s in sd_list if s.id == ep.subdomain_id), None)
+            if sd:
+                name = sd.name
+        result[name] = result.get(name, 0) + 1
+    return result
+
+
+def _build_top_items(data, key_name="name", limit=10):
+    return sorted(
+        [{key_name: k, "vulnerabilities": v} for k, v in data.items()],
+        key=lambda x: x["vulnerabilities"], reverse=True,
+    )[:limit]
+
+
 @router.get("/{job_id}/overview", response_model=dict)
 async def get_results_overview(
     job_id: UUID,
@@ -39,17 +88,7 @@ async def get_results_overview(
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = Depends(rate_limit),
 ):
-    result = await db.execute(
-        select(ScanJob).where(ScanJob.id == job_id, ScanJob.owner_id == current_user.id)
-    )
-    job = result.scalar_one_or_none()
-    
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Scan job not found",
-        )
-    
+    job = await _get_job_or_404(db, job_id, current_user.id)
     subdomains_count = await db.execute(
         select(func.count(Subdomain.id)).where(Subdomain.scan_job_id == job_id)
     )
@@ -94,17 +133,7 @@ async def get_full_results(
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = Depends(rate_limit),
 ):
-    result = await db.execute(
-        select(ScanJob).where(ScanJob.id == job_id, ScanJob.owner_id == current_user.id)
-    )
-    job = result.scalar_one_or_none()
-    
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Scan job not found",
-        )
-    
+    await _get_job_or_404(db, job_id, current_user.id)
     subdomains = await db.execute(
         select(Subdomain).where(Subdomain.scan_job_id == job_id).order_by(Subdomain.name)
     )
@@ -145,87 +174,25 @@ async def get_aggregated_stats(
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = Depends(rate_limit),
 ):
-    result = await db.execute(
-        select(ScanJob).where(ScanJob.id == job_id, ScanJob.owner_id == current_user.id)
-    )
-    job = result.scalar_one_or_none()
+    await _get_job_or_404(db, job_id, current_user.id)
     
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Scan job not found",
-        )
-    
-    subdomains = await db.execute(
-        select(Subdomain).where(Subdomain.scan_job_id == job_id)
-    )
-    sd_list = subdomains.scalars().all()
-    
-    vulns = await db.execute(
-        select(Vulnerability).where(Vulnerability.scan_job_id == job_id)
-    )
-    vuln_list = vulns.scalars().all()
-    
-    endpoints = await db.execute(
-        select(Endpoint).where(Endpoint.scan_job_id == job_id)
-    )
-    ep_list = endpoints.scalars().all()
+    sd_list = (await db.execute(select(Subdomain).where(Subdomain.scan_job_id == job_id))).scalars().all()
+    vuln_list = (await db.execute(select(Vulnerability).where(Vulnerability.scan_job_id == job_id))).scalars().all()
+    ep_list = (await db.execute(select(Endpoint).where(Endpoint.scan_job_id == job_id))).scalars().all()
     
     vulns_by_severity = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
     for v in vuln_list:
         vulns_by_severity[v.severity.value] = vulns_by_severity.get(v.severity.value, 0) + 1
     
-    tech_counts = {}
-    server_counts = {}
-    status_codes = {}
-    
-    for s in sd_list:
-        for t in (s.technologies or []):
-            tech_counts[t] = tech_counts.get(t, 0) + 1
-        if s.web_server:
-            server_counts[s.web_server] = server_counts.get(s.web_server, 0) + 1
-        if s.status_code:
-            code_str = str(s.status_code)
-            status_codes[code_str] = status_codes.get(code_str, 0) + 1
-    
-    for e in ep_list:
-        for t in (e.technologies or []):
-            tech_counts[t] = tech_counts.get(t, 0) + 1
-        if e.status_code:
-            code_str = str(e.status_code)
-            status_codes[code_str] = status_codes.get(code_str, 0) + 1
-    
-    vulns_by_subdomain = {}
-    for v in vuln_list:
-        subdomain_name = "unknown"
-        ep = next((e for e in ep_list if e.id == v.endpoint_id), None)
-        if ep and ep.subdomain_id:
-            sd = next((s for s in sd_list if s.id == ep.subdomain_id), None)
-            if sd:
-                subdomain_name = sd.name
-        
-        if subdomain_name not in vulns_by_subdomain:
-            vulns_by_subdomain[subdomain_name] = 0
-        vulns_by_subdomain[subdomain_name] += 1
-    
-    top_subdomains = sorted(
-        [{"name": k, "vulnerabilities": v} for k, v in vulns_by_subdomain.items()],
-        key=lambda x: x["vulnerabilities"],
-        reverse=True,
-    )[:10]
+    tech_counts, server_counts, status_codes = _build_tech_server_counts(sd_list, ep_list)
+    vuln_subdomain_map = _build_vuln_subdomain_map(vuln_list, ep_list, sd_list)
+    top_subdomains = _build_top_items(vuln_subdomain_map, "name")
     
     vulns_by_endpoint = {}
     for v in vuln_list:
         url = v.url[:100]
-        if url not in vulns_by_endpoint:
-            vulns_by_endpoint[url] = 0
-        vulns_by_endpoint[url] += 1
-    
-    top_endpoints = sorted(
-        [{"name": k, "url": k, "vulnerabilities": v} for k, v in vulns_by_endpoint.items()],
-        key=lambda x: x["vulnerabilities"],
-        reverse=True,
-    )[:10]
+        vulns_by_endpoint[url] = vulns_by_endpoint.get(url, 0) + 1
+    top_endpoints = _build_top_items(vulns_by_endpoint, "name")
     
     return AggregatedStats(
         total_subdomains=len(sd_list),
@@ -243,144 +210,92 @@ async def get_aggregated_stats(
 
 
 @router.get("/{job_id}/graph", response_model=AttackSurfaceGraph)
+def _add_domain_node(nodes, edges, target_domain):
+    nodes.append({"id": f"domain-{target_domain}", "label": target_domain, "type": "domain", "level": 0})
+
+
+def _add_subdomain_nodes(nodes, edges, sd_list, vulns_by_subdomain):
+    for sd in sd_list:
+        nodes.append({
+            "id": f"subdomain-{sd.id}", "label": sd.name, "type": "subdomain", "level": 1,
+            "is_alive": sd.is_alive, "technologies": sd.technologies,
+            "status_code": sd.status_code, "title": sd.title,
+            "vulnerability_count": sum(1 for v in vulns_by_subdomain.get(str(sd.id), [])),
+            "ip": sd.ips[0] if sd.ips else None,
+        })
+        edges.append({
+            "id": f"edge-domain-{sd.id}", "source": nodes[0]["id"],
+            "target": f"subdomain-{sd.id}", "type": "dns", "label": "resolves_to",
+        })
+
+
+def _add_endpoint_nodes(nodes, edges, ep_list, sd_list):
+    ep_by_subdomain = {}
+    for ep in ep_list:
+        if ep.subdomain_id:
+            ep_by_subdomain.setdefault(str(ep.subdomain_id), []).append(ep)
+    for sd_id, eps in ep_by_subdomain.items():
+        for ep in eps[:50]:
+            nodes.append({
+                "id": f"endpoint-{ep.id}", "label": (ep.path or ep.url)[:50],
+                "type": "endpoint", "level": 2, "url": ep.url, "method": ep.method,
+                "status_code": ep.status_code, "content_type": ep.content_type,
+                "source": ep.source.value if ep.source else None,
+            })
+            edges.append({
+                "id": f"edge-endpoint-{ep.id}", "source": f"subdomain-{sd_id}",
+                "target": f"endpoint-{ep.id}", "type": "endpoint", "label": f"{ep.method}",
+            })
+
+
+def _add_vuln_nodes(nodes, edges, vuln_list):
+    vulns_by_endpoint = {}
+    for v in vuln_list:
+        if v.endpoint_id:
+            vulns_by_endpoint.setdefault(str(v.endpoint_id), []).append(v)
+    for ep_id, vulns_list in vulns_by_endpoint.items():
+        for v in vulns_list[:5]:
+            nodes.append({
+                "id": f"vuln-{v.id}", "label": v.name[:50], "type": "vulnerability",
+                "level": 3, "severity": v.severity.value, "template_id": v.template_id,
+                "cvss_score": v.cvss_score,
+            })
+            edges.append({
+                "id": f"edge-vuln-{v.id}", "source": f"endpoint-{ep_id}",
+                "target": f"vuln-{v.id}", "type": "vulnerability", "label": v.severity.value,
+            })
+
+
+def _build_vulns_by_subdomain(vuln_list, ep_list):
+    result = {}
+    for v in vuln_list:
+        ep = next((e for e in ep_list if e.id == v.endpoint_id), None)
+        if ep and ep.subdomain_id:
+            result.setdefault(str(ep.subdomain_id), []).append(v)
+    return result
+
+
 async def get_attack_surface_graph(
     job_id: UUID,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = Depends(rate_limit),
 ):
-    result = await db.execute(
-        select(ScanJob).where(ScanJob.id == job_id, ScanJob.owner_id == current_user.id)
-    )
-    job = result.scalar_one_or_none()
+    job = await _get_job_or_404(db, job_id, current_user.id)
     
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Scan job not found",
-        )
+    sd_list = (await db.execute(select(Subdomain).where(Subdomain.scan_job_id == job_id))).scalars().all()
+    ep_list = (await db.execute(select(Endpoint).where(Endpoint.scan_job_id == job_id))).scalars().all()
+    vuln_list = (await db.execute(select(Vulnerability).where(Vulnerability.scan_job_id == job_id))).scalars().all()
     
-    subdomains = await db.execute(
-        select(Subdomain).where(Subdomain.scan_job_id == job_id)
-    )
-    sd_list = subdomains.scalars().all()
-    
-    endpoints = await db.execute(
-        select(Endpoint).where(Endpoint.scan_job_id == job_id)
-    )
-    ep_list = endpoints.scalars().all()
-    
-    vulns = await db.execute(
-        select(Vulnerability).where(Vulnerability.scan_job_id == job_id)
-    )
-    vuln_list = vulns.scalars().all()
-    
-    nodes = []
-    edges = []
-    
-    domain_node = {
-        "id": f"domain-{job.target_domain}",
-        "label": job.target_domain,
-        "type": "domain",
-        "level": 0,
-    }
-    nodes.append(domain_node)
-    
-    vulns_by_subdomain = {}
-    for v in vuln_list:
-        ep = next((e for e in ep_list if e.id == v.endpoint_id), None)
-        if ep and ep.subdomain_id:
-            sd_id = str(ep.subdomain_id)
-            if sd_id not in vulns_by_subdomain:
-                vulns_by_subdomain[sd_id] = []
-            vulns_by_subdomain[sd_id].append(v)
-    
-    for sd in sd_list:
-        sd_node = {
-            "id": f"subdomain-{sd.id}",
-            "label": sd.name,
-            "type": "subdomain",
-            "level": 1,
-            "is_alive": sd.is_alive,
-            "technologies": sd.technologies,
-            "status_code": sd.status_code,
-            "title": sd.title,
-            "vulnerability_count": sum(1 for v in vulns_by_subdomain.get(str(sd.id), [])),
-            "ip": sd.ips[0] if sd.ips else None,
-        }
-        nodes.append(sd_node)
-        
-        edges.append({
-            "id": f"edge-domain-{sd.id}",
-            "source": f"domain-{job.target_domain}",
-            "target": f"subdomain-{sd.id}",
-            "type": "dns",
-            "label": "resolves_to",
-        })
-    
-    ep_by_subdomain = {}
-    for ep in ep_list:
-        if ep.subdomain_id:
-            sd_id = str(ep.subdomain_id)
-            if sd_id not in ep_by_subdomain:
-                ep_by_subdomain[sd_id] = []
-            ep_by_subdomain[sd_id].append(ep)
-    
-    for sd_id, eps in ep_by_subdomain.items():
-        for ep in eps[:50]:
-            ep_node = {
-                "id": f"endpoint-{ep.id}",
-                "label": (ep.path or ep.url)[:50],
-                "type": "endpoint",
-                "level": 2,
-                "url": ep.url,
-                "method": ep.method,
-                "status_code": ep.status_code,
-                "content_type": ep.content_type,
-                "source": ep.source.value if ep.source else None,
-            }
-            nodes.append(ep_node)
-            
-            edges.append({
-                "id": f"edge-endpoint-{ep.id}",
-                "source": f"subdomain-{sd_id}",
-                "target": f"endpoint-{ep.id}",
-                "type": "endpoint",
-                "label": f"{ep.method}",
-            })
-    
-    vulns_by_endpoint = {}
-    for v in vuln_list:
-        if v.endpoint_id:
-            ep_id = str(v.endpoint_id)
-            if ep_id not in vulns_by_endpoint:
-                vulns_by_endpoint[ep_id] = []
-            vulns_by_endpoint[ep_id].append(v)
-    
-    for ep_id, vulns_list in vulns_by_endpoint.items():
-        for v in vulns_list[:5]:
-            vuln_node = {
-                "id": f"vuln-{v.id}",
-                "label": v.name[:50],
-                "type": "vulnerability",
-                "level": 3,
-                "severity": v.severity.value,
-                "template_id": v.template_id,
-                "cvss_score": v.cvss_score,
-            }
-            nodes.append(vuln_node)
-            
-            edges.append({
-                "id": f"edge-vuln-{v.id}",
-                "source": f"endpoint-{ep_id}",
-                "target": f"vuln-{v.id}",
-                "type": "vulnerability",
-                "label": v.severity.value,
-            })
+    nodes, edges = [], []
+    _add_domain_node(nodes, edges, job.target_domain)
+    vulns_by_subdomain = _build_vulns_by_subdomain(vuln_list, ep_list)
+    _add_subdomain_nodes(nodes, edges, sd_list, vulns_by_subdomain)
+    _add_endpoint_nodes(nodes, edges, ep_list, sd_list)
+    _add_vuln_nodes(nodes, edges, vuln_list)
     
     return AttackSurfaceGraph(
-        nodes=nodes,
-        edges=edges,
+        nodes=nodes, edges=edges,
         metadata={
             "target_domain": job.target_domain,
             "total_subdomains": len(sd_list),

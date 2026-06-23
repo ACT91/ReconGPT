@@ -221,7 +221,7 @@ class AIService:
     ) -> List[AiInsight]:
         query = select(AiInsight).where(
             AiInsight.scan_job_id == job_id,
-            AiInsight.is_dismissed == False,
+            AiInsight.is_dismissed.is_(False),
         )
         
         if insight_type:

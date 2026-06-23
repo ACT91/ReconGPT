@@ -141,13 +141,14 @@ def _build_vulnerability_breakdown(vulnerabilities: List[Dict[str, Any]]) -> str
     
     critical_vulns = [v for v in vulnerabilities if (v.get("info", {}) if isinstance(v, dict) else {}).get("severity", "").lower() in ["critical", "high"]]
     if critical_vulns:
-        breakdown += "\n\nTop vulnerabilities:\n"
+        lines = ["\n\nTop vulnerabilities:"]
         for v in critical_vulns[:5]:
             info = v.get("info", {}) if isinstance(v, dict) else {}
             name = info.get("name", "Unknown")
             severity = info.get("severity", "unknown")
             url = v.get("host", v.get("url", "N/A"))
-            breakdown += f"- [{severity.upper()}] {name} at {url}\n"
+            lines.append(f"- [{severity.upper()}] {name} at {url}")
+        breakdown += "\n".join(lines)
     
     return breakdown
 

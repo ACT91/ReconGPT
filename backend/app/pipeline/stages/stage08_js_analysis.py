@@ -35,6 +35,40 @@ class JsAnalysisStage(PipelineStageBase):
     def stage_name(self) -> PipelineStage:
         return PipelineStage.JS_ANALYSIS
 
+    def _extract_hidden_endpoints(self, content: str) -> Set[str]:
+        result: Set[str] = set()
+        for pattern in HIDDEN_ENDPOINT_PATTERNS:
+            for m in re.findall(pattern, content):
+                if isinstance(m, tuple):
+                    m = m[0]
+                m = m.strip('"\'')
+                if len(m) > 3 and not m.startswith(('http://', 'https://', '//')):
+                    result.add(m)
+        return result
+
+    def _extract_api_endpoints(self, content: str) -> Set[str]:
+        result: Set[str] = set()
+        for pattern in API_PATTERNS:
+            for m in re.findall(pattern, content):
+                if isinstance(m, tuple):
+                    m = m[0]
+                result.add(m.strip('"\''))
+        return result
+
+    def _extract_secrets(self, content: str, filename: str) -> List[Dict[str, Any]]:
+        result: List[Dict[str, Any]] = []
+        for pattern, secret_type in SECRET_PATTERNS:
+            for m in re.findall(pattern, content):
+                if isinstance(m, tuple):
+                    m = m[0]
+                if len(m) > 6:
+                    result.append({
+                        "type": secret_type,
+                        "value": m[:50] + "..." if len(m) > 50 else m,
+                        "file": filename,
+                    })
+        return result
+
     async def execute(self) -> Dict[str, Any]:
         await self.mark_started()
         
@@ -55,42 +89,14 @@ class JsAnalysisStage(PipelineStageBase):
                 try:
                     content = js_file.read_text(encoding='utf-8', errors='ignore')
                     analyzed_count += 1
-                    
-                    for pattern in HIDDEN_ENDPOINT_PATTERNS:
-                        matches = re.findall(pattern, content)
-                        for m in matches:
-                            if isinstance(m, tuple):
-                                m = m[0]
-                            m = m.strip('"\'')
-                            if len(m) > 3 and not m.startswith(('http://', 'https://', '//')):
-                                hidden_endpoints.add(m)
-                    
-                    for pattern in API_PATTERNS:
-                        matches = re.findall(pattern, content)
-                        for m in matches:
-                            if isinstance(m, tuple):
-                                m = m[0]
-                            api_endpoints.add(m.strip('"\''))
-                    
-                    for pattern, secret_type in SECRET_PATTERNS:
-                        matches = re.findall(pattern, content)
-                        for m in matches:
-                            if isinstance(m, tuple):
-                                m = m[0]
-                            if len(m) > 6:
-                                secrets.append({
-                                    "type": secret_type,
-                                    "value": m[:50] + "..." if len(m) > 50 else m,
-                                    "file": js_file.name,
-                                })
-                
+                    hidden_endpoints.update(self._extract_hidden_endpoints(content))
+                    api_endpoints.update(self._extract_api_endpoints(content))
+                    secrets.extend(self._extract_secrets(content, js_file.name))
                 except (OSError, UnicodeDecodeError, re.error) as e:
                     await self.warning(f"Failed to analyze {js_file.name}: {e}")
-                    continue
             
             self.write_lines("endpoints_hidden.txt", sorted(hidden_endpoints))
             self.write_lines("endpoints_api.txt", sorted(api_endpoints))
-            
             if secrets:
                 self.save_json(secrets, "js_secrets.json")
             

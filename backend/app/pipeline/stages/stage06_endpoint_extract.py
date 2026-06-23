@@ -48,7 +48,7 @@ class EndpointExtractStage(PipelineStageBase):
             output_file = self.output_dir / "endpoints_crawl.txt"
             output_file.write_text('\n'.join(ep_list), encoding='utf-8')
             
-            if len(endpoints) == 0:
+            if not endpoints:
                 await self.warning("No endpoints extracted from crawl (file empty or only static resources)")
             else:
                 await self.info(f"Extracted {len(endpoints)} unique endpoints from crawl")

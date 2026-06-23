@@ -230,106 +230,43 @@ class ScanService:
             has_more=(page * page_size) < total if pagination else False,
         )
 
+    async def _fetch_scan_data(self, job_id: UUID):
+        sd = (await self.db.execute(select(Subdomain).where(Subdomain.scan_job_id == job_id).order_by(Subdomain.name))).scalars().all()
+        ep = (await self.db.execute(select(Endpoint).where(Endpoint.scan_job_id == job_id).order_by(Endpoint.url))).scalars().all()
+        vulns = (await self.db.execute(select(Vulnerability).where(Vulnerability.scan_job_id == job_id).order_by(desc(Vulnerability.severity)))).scalars().all()
+        js = (await self.db.execute(select(JsFile).where(JsFile.scan_job_id == job_id))).scalars().all()
+        ins = (await self.db.execute(select(AiInsight).where(AiInsight.scan_job_id == job_id).order_by(desc(AiInsight.priority_score)))).scalars().all()
+        return sd, ep, vulns, js, ins
+
     async def get_scan_results(self, job_id: UUID) -> Dict[str, Any]:
-        subdomains = await self.db.execute(
-            select(Subdomain).where(Subdomain.scan_job_id == job_id).order_by(Subdomain.name)
-        )
-        endpoints = await self.db.execute(
-            select(Endpoint).where(Endpoint.scan_job_id == job_id).order_by(Endpoint.url)
-        )
-        vulnerabilities = await self.db.execute(
-            select(Vulnerability).where(Vulnerability.scan_job_id == job_id).order_by(desc(Vulnerability.severity))
-        )
-        js_files = await self.db.execute(
-            select(JsFile).where(JsFile.scan_job_id == job_id)
-        )
-        insights = await self.db.execute(
-            select(AiInsight).where(AiInsight.scan_job_id == job_id).order_by(desc(AiInsight.priority_score))
-        )
+        sd_list, ep_list, vuln_list, js_list, ins_list = await self._fetch_scan_data(job_id)
         
-        vuln_list = vulnerabilities.scalars().all()
-        
-        return {
-            "subdomains": [
-                {
-                    "id": str(s.id),
-                    "name": s.name,
-                    "is_alive": s.is_alive,
-                    "status_code": s.status_code,
-                    "technologies": s.technologies,
-                    "title": s.title,
-                    "web_server": s.web_server,
-                    "ips": s.ips,
-                    "cname": s.cname,
-                }
-                for s in subdomains.scalars().all()
-            ],
-            "endpoints": [
-                {
-                    "id": str(e.id),
-                    "url": e.url,
-                    "method": e.method,
-                    "status_code": e.status_code,
-                    "content_type": e.content_type,
-                    "title": e.title,
-                    "status": e.status.value if e.status else None,
-                    "source": e.source.value if e.source else None,
-                }
-                for e in endpoints.scalars().all()
-            ],
-            "vulnerabilities": [
-                {
-                    "id": str(v.id),
-                    "name": v.name,
-                    "template_id": v.template_id,
-                    "severity": v.severity.value,
-                    "url": v.url,
-                    "description": v.description,
-                    "remediation": v.remediation,
-                    "cve_ids": v.cve_ids,
-                    "cwe_ids": v.cwe_ids,
-                    "cvss_score": v.cvss_score,
-                    "matched_at": v.matched_at,
-                }
-                for v in vuln_list
-            ],
-            "js_files": [
-                {
-                    "id": str(j.id),
-                    "url": j.url,
-                    "downloaded": j.downloaded,
-                    "analyzed": j.analyzed,
-                    "size_bytes": j.size_bytes,
-                    "endpoints_found": j.endpoints_found,
-                    "secrets_found": j.secrets_found,
-                }
-                for j in js_files.scalars().all()
-            ],
-            "insights": [
-                {
-                    "id": str(i.id),
-                    "type": i.insight_type.value,
-                    "priority": i.priority.value,
-                    "title": i.title,
-                    "summary": i.summary,
-                    "priority_score": i.priority_score,
-                }
-                for i in insights.scalars().all()
-            ],
-            "stats": {
-                "total_subdomains": len(subdomains.scalars().all()),
-                "alive_subdomains": sum(1 for s in subdomains.scalars().all() if s.is_alive),
-                "total_endpoints": len(endpoints.scalars().all()),
-                "total_vulnerabilities": len(vuln_list),
-                "vulnerabilities_by_severity": {
-                    "critical": sum(1 for v in vuln_list if v.severity == VulnerabilitySeverity.CRITICAL),
-                    "high": sum(1 for v in vuln_list if v.severity == VulnerabilitySeverity.HIGH),
-                    "medium": sum(1 for v in vuln_list if v.severity == VulnerabilitySeverity.MEDIUM),
-                    "low": sum(1 for v in vuln_list if v.severity == VulnerabilitySeverity.LOW),
-                    "info": sum(1 for v in vuln_list if v.severity == VulnerabilitySeverity.INFO),
-                },
+        subdomains = [{"id": str(s.id), "name": s.name, "is_alive": s.is_alive, "status_code": s.status_code,
+            "technologies": s.technologies, "title": s.title, "web_server": s.web_server, "ips": s.ips, "cname": s.cname} for s in sd_list]
+        endpoints = [{"id": str(e.id), "url": e.url, "method": e.method, "status_code": e.status_code,
+            "content_type": e.content_type, "title": e.title, "status": e.status.value if e.status else None,
+            "source": e.source.value if e.source else None} for e in ep_list]
+        vulnerabilities = [{"id": str(v.id), "name": v.name, "template_id": v.template_id, "severity": v.severity.value,
+            "url": v.url, "description": v.description, "remediation": v.remediation, "cve_ids": v.cve_ids,
+            "cwe_ids": v.cwe_ids, "cvss_score": v.cvss_score, "matched_at": v.matched_at} for v in vuln_list]
+        js_files = [{"id": str(j.id), "url": j.url, "downloaded": j.downloaded, "analyzed": j.analyzed,
+            "size_bytes": j.size_bytes, "endpoints_found": j.endpoints_found, "secrets_found": j.secrets_found} for j in js_list]
+        insights = [{"id": str(i.id), "type": i.insight_type.value, "priority": i.priority.value, "title": i.title,
+            "summary": i.summary, "priority_score": i.priority_score} for i in ins_list]
+        stats = {
+            "total_subdomains": len(sd_list), "alive_subdomains": sum(1 for s in sd_list if s.is_alive),
+            "total_endpoints": len(ep_list), "total_vulnerabilities": len(vuln_list),
+            "vulnerabilities_by_severity": {
+                "critical": sum(1 for v in vuln_list if v.severity == VulnerabilitySeverity.CRITICAL),
+                "high": sum(1 for v in vuln_list if v.severity == VulnerabilitySeverity.HIGH),
+                "medium": sum(1 for v in vuln_list if v.severity == VulnerabilitySeverity.MEDIUM),
+                "low": sum(1 for v in vuln_list if v.severity == VulnerabilitySeverity.LOW),
+                "info": sum(1 for v in vuln_list if v.severity == VulnerabilitySeverity.INFO),
             },
         }
+        
+        return {"subdomains": subdomains, "endpoints": endpoints, "vulnerabilities": vulnerabilities,
+                "js_files": js_files, "insights": insights, "stats": stats}
 
     async def get_job_subdomains(
         self, job_id: UUID, pagination: PaginationParams

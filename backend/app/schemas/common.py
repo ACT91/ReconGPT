@@ -67,6 +67,6 @@ def parse_sort_param(sort: Optional[str], default_field: str = "created_at", def
     if not sort:
         return default_field, default_dir
     parts = sort.split(":")
-    field = parts[0] if len(parts) > 0 else default_field
+    field = parts[0] if parts else default_field
     direction = parts[1].lower() if len(parts) > 1 and parts[1].lower() in ("asc", "desc") else default_dir
     return field, direction

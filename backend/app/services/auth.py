@@ -281,7 +281,7 @@ class AuthService:
         result = await self.db.execute(
             select(APIKey)
             .where(APIKey.key_prefix == prefix)
-            .where(APIKey.is_active == True)
+            .where(APIKey.is_active.is_(True))
             .options(selectinload(APIKey.user))
         )
         api_key = result.scalar_one_or_none()
