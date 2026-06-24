@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { projectApi, scanApi, getApiError } from '@/services/api'
+import { useProjectStore } from '@/store/project'
 import { ErrorBoundary, StatusBadge, ScanProgressBar } from '@/components/common'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -118,12 +119,19 @@ export function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const [showNewScan, setShowNewScan] = useState(false)
+  const setSelectedProject = useProjectStore((s) => s.setSelectedProject)
 
   const { data: project, isLoading: projectLoading } = useQuery({
     queryKey: ['project', projectId],
     queryFn: () => projectApi.get(projectId!),
     enabled: !!projectId,
   })
+
+  useEffect(() => {
+    if (project) {
+      setSelectedProject(project)
+    }
+  }, [project, setSelectedProject])
 
   const { data: stats } = useQuery({
     queryKey: ['project-stats', projectId],

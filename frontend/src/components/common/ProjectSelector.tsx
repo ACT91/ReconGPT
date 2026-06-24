@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { projectApi } from '@/services/api'
 import { useProjectStore } from '@/store/project'
@@ -21,6 +22,15 @@ export function ProjectSelector({ isCollapsed = false }: { isCollapsed?: boolean
   })
 
   const projects = data?.items || []
+
+  useEffect(() => {
+    if (selectedProject && projects.length > 0) {
+      const exists = projects.some((p: Project) => p.id === selectedProject.id)
+      if (!exists) {
+        clearProject()
+      }
+    }
+  }, [projects, selectedProject, clearProject])
 
   return (
     <DropdownMenu>

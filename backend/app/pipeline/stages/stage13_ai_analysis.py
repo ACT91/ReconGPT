@@ -46,8 +46,8 @@ class AiAnalysisStage(PipelineStageBase):
         if nuclei_path.exists():
             with open(nuclei_path) as f:
                 artifacts["vulnerabilities"] = [
-                    json.loads(line) for line in f
-                    if (line := line.strip()) and not line.startswith('#')
+                    json.loads(l) for l in f
+                    if (s := l.strip()) and not s.startswith('#')
                 ]
         
         secrets_path = self.output_dir / "js_secrets.json"

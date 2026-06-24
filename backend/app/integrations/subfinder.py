@@ -15,6 +15,8 @@ async def run_subfinder(
         "-o", str(output_file),
         "-silent",
         "-all",
+        "-timeout", "120",
+        "-r", "1.1.1.1,8.8.8.8",
     ]
     
     if sources:

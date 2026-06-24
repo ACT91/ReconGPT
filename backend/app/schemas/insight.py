@@ -6,6 +6,8 @@ from app.models.ai_insight import InsightType, InsightPriority
 
 
 class AiInsightBase(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     insight_type: InsightType
     priority: InsightPriority
     priority_score: float
@@ -52,6 +54,8 @@ class AiInsightListResponse(BaseModel):
 
 
 class AiAnalysisReport(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     target: str
     generated_at: datetime
     model_used: str

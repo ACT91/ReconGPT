@@ -72,6 +72,7 @@ export enum PipelineStage {
 export interface ScanJob {
   id: string
   project_id?: string
+  owner_id: string
   target_domain: string
   status: JobStatus
   current_stage: PipelineStage | null
@@ -79,6 +80,7 @@ export interface ScanJob {
   error_message?: string
   celery_task_id?: string
   created_at: string
+  updated_at?: string
   started_at?: string
   completed_at?: string
 }

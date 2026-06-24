@@ -42,6 +42,9 @@ class ScanJobResponse(ScanJobBase, TimestampMixin, IDMixin):
 class ScanJobListResponse(BaseSchema):
     items: List[ScanJobResponse]
     total: int
+    page: int
+    page_size: int
+    total_pages: int
 
 
 class ScanJobDetailResponse(ScanJobResponse):

@@ -21,7 +21,8 @@ from app.schemas.scan import (
 from app.schemas.common import PaginationParams, parse_sort_param
 from app.core.logger import get_logger
 from app.core.security_middleware import validate_domain, sanitize_domain
-from app.core.exceptions import DomainValidationException, StorageException
+from app.core.exceptions import DomainValidationException, StorageException, AppException
+from app.models.project import Project
 
 
 logger = get_logger(__name__)
@@ -60,6 +61,19 @@ class ScanService:
             )
         
         target_domain = sanitized_domain
+        
+        if project_id:
+            result = await self.db.execute(
+                select(Project).where(Project.id == project_id, Project.owner_id == user_id)
+            )
+            project = result.scalar_one_or_none()
+            if not project:
+                raise AppException(
+                    message="Project not found",
+                    detail="The selected project does not exist or has been deleted",
+                    code="project_not_found",
+                    status_code=400,
+                )
         
         job = ScanJob(
             owner_id=user_id,

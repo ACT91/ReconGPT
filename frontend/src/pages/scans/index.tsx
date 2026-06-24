@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { useState, useMemo, useEffect } from 'react'
+import { Link, useParams } from 'react-router-dom'
 import {
   useReactTable,
   getCoreRowModel,
@@ -333,6 +333,7 @@ function ScanDetailPanel({ job, onClose }: { job: ScanJob; onClose: () => void }
 }
 
 export function ScansPage() {
+  const { scanId } = useParams()
   const [showNewScan, setShowNewScan] = useState(false)
   const [selectedJob, setSelectedJob] = useState<ScanJob | null>(null)
   const [deletingJob, setDeletingJob] = useState<ScanJob | null>(null)
@@ -341,7 +342,19 @@ export function ScansPage() {
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
   const selectedProject = useProjectStore((s) => s.selectedProject)
 
-  const { data: scansData, isLoading } = useQuery({
+  const { data: scanFromUrl, isLoading: scanFromUrlLoading } = useQuery({
+    queryKey: ['scan', scanId],
+    queryFn: () => scanApi.get(scanId!),
+    enabled: !!scanId,
+  })
+
+  useEffect(() => {
+    if (scanFromUrl) {
+      setSelectedJob(scanFromUrl)
+    }
+  }, [scanFromUrl])
+
+  const { data: scansData, isLoading: scansLoading } = useQuery({
     queryKey: ['scans', pagination, sorting, globalFilter, selectedProject?.id],
     queryFn: () =>
       scanApi.list({
@@ -351,6 +364,7 @@ export function ScansPage() {
         search: globalFilter || undefined,
         ...(selectedProject?.id ? { project_id: selectedProject.id } : {}),
       }),
+    refetchInterval: 5000,
   })
 
   const queryClient = useQueryClient()
@@ -504,7 +518,7 @@ export function ScansPage() {
       </div>
 
       <ErrorBoundary>
-      {isLoading ? (
+      {scansLoading || scanFromUrlLoading ? (
         <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
           <SkeletonTable rows={6} cols={6} />
         </div>
